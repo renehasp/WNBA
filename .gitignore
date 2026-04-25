@@ -36,6 +36,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# locally-cached WNBA player headshots (populated at runtime / by /api/wnba/headshots/refresh)
+/public/headshots/
+
+# Claude Code local workspace state (worktrees, settings)
+/.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
