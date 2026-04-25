@@ -230,44 +230,41 @@ export default function ScoreboardHero({
                        radial-gradient(ellipse 60% 50% at 80% 50%, ${hexWithOpacity(homeColor, 0.08)} 0%, transparent 70%)`,
         }} />
 
-      {/* Background team logo watermarks — away centered on 25%, home centered on 75% */}
+      {/* Background team logo watermarks — CSS background, not LCP-tracked.
+          Away centered on the 25% line, home on the 75% line. */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
         {away.team.logo && (
-          <Image
-            src={away.team.logo}
-            alt=""
-            width={400}
-            height={400}
-            className="object-contain absolute"
+          <div
+            className="absolute"
             style={{
-              left: "25%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "35%",
-              height: "auto",
+              left: 0,
+              top: 0,
+              width: "50%",
+              height: "100%",
+              backgroundImage: `url(${away.team.logo})`,
+              backgroundSize: "70%",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
               opacity: 0.06,
               filter: "blur(0.5px)",
             }}
-            unoptimized
           />
         )}
         {home.team.logo && (
-          <Image
-            src={home.team.logo}
-            alt=""
-            width={400}
-            height={400}
-            className="object-contain absolute"
+          <div
+            className="absolute"
             style={{
-              left: "75%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "35%",
-              height: "auto",
+              left: "50%",
+              top: 0,
+              width: "50%",
+              height: "100%",
+              backgroundImage: `url(${home.team.logo})`,
+              backgroundSize: "70%",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
               opacity: 0.06,
               filter: "blur(0.5px)",
             }}
-            unoptimized
           />
         )}
       </div>

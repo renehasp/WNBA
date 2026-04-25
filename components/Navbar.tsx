@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle, Users } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ type RefreshStatus =
 export default function Navbar() {
   const { syncMode, delaySeconds } = useAppStore();
   const [refresh, setRefresh] = useState<RefreshStatus>({ kind: "idle" });
+  const pathname = usePathname();
+  const teamsActive = pathname?.startsWith("/teams") ?? false;
 
   const veilStatus = (() => {
     if (syncMode === "synced") return { label: "TV Synced", color: "#3b82f6", Icon: Radio, pulse: true };
@@ -72,19 +75,35 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b border-white/[0.06]"
       style={{ background: "rgba(10,10,15,0.85)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-            style={{ background: "linear-gradient(135deg, #a855f7, #3b82f6)" }}>
-            🏀
-          </div>
-          <span className="font-bold text-base text-white hidden sm:block tracking-tight">
-            WNBA <span className="text-transparent bg-clip-text"
-              style={{ backgroundImage: "linear-gradient(135deg, #a855f7, #3b82f6)" }}>
-              SyncCourt
+        {/* Logo + primary nav */}
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
+              style={{ background: "linear-gradient(135deg, #a855f7, #3b82f6)" }}>
+              🏀
+            </div>
+            <span className="font-bold text-base text-white hidden sm:block tracking-tight">
+              WNBA <span className="text-transparent bg-clip-text"
+                style={{ backgroundImage: "linear-gradient(135deg, #a855f7, #3b82f6)" }}>
+                SyncCourt
+              </span>
             </span>
-          </span>
-        </Link>
+          </Link>
+
+          <nav className="flex items-center gap-1">
+            <Link
+              href="/teams"
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border",
+                teamsActive
+                  ? "text-white border-white/20 bg-white/[0.06]"
+                  : "text-white/45 border-transparent hover:text-white/80 hover:border-white/10",
+              )}>
+              <Users size={13} />
+              <span>Teams</span>
+            </Link>
+          </nav>
+        </div>
 
         {/* Right side */}
         <div className="flex items-center gap-3">
