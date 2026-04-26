@@ -150,6 +150,8 @@ public/       icon.svg (PWA), manifest.json
 
 All sports data and images come from [ESPN's public WNBA endpoints](https://www.espn.com/wnba/). News articles link back to the original ESPN article in a new tab. This project is unaffiliated with ESPN or the WNBA.
 
+Copyright 2026 NBA Media Ventures, LLC. All rights reserved. No portion of WNBA.com may be duplicated, redistributed or manipulated in any form.
+
 ## License
 
 This is a personal project — no license attached. If you fork or reuse it, please respect ESPN's terms of service for the underlying data.
