@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle, Users } from "lucide-react";
+import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle, Users, Settings as SettingsIcon } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { cn } from "@/lib/utils";
 
@@ -152,6 +152,19 @@ export default function Navbar() {
             title="Spoiler Veil">
             <Shield size={15} />
           </button>
+
+          <Link
+            href="/settings"
+            title="Settings"
+            aria-label="Settings"
+            className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center border transition-colors",
+              pathname === "/settings"
+                ? "text-white border-white/25 bg-white/[0.06]"
+                : "border-white/10 text-white/50 hover:text-white/80 hover:border-white/20",
+            )}>
+            <SettingsIcon size={15} />
+          </Link>
         </div>
       </div>
     </header>

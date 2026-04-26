@@ -30,6 +30,9 @@
 
 html {
   color-scheme: dark;
+  /* Allow horizontal scroll on the document so high font-scale layouts
+     extend off-screen rather than being clipped by a small viewport. */
+  overflow-x: auto;
 }
 
 body {
@@ -37,6 +40,10 @@ body {
   color: #f8f9fa;
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   min-height: 100vh;
+  /* Body never narrower than the viewport. Content that ends up wider than
+     the viewport (e.g. when the user scales the font up on a small screen)
+     overflows naturally and the html element scrolls horizontally. */
+  min-width: 100%;
   -webkit-font-smoothing: antialiased;
 }
 
