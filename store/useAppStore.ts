@@ -14,6 +14,8 @@ interface AppState {
   // Multiplier on the root html font-size (1.0 = 100%). Persisted so the
   // setting carries across navigations and reloads.
   fontScale: number;
+  // IANA time zone (e.g. "America/New_York"). null = use the device default.
+  timeZone: string | null;
 
   setSelectedGame: (id: string | null) => void;
   setDelay: (seconds: number) => void;
@@ -24,7 +26,25 @@ interface AppState {
   increaseFontScale: () => void;
   decreaseFontScale: () => void;
   resetFontScale: () => void;
+  setTimeZone: (zone: string | null) => void;
 }
+
+// Common WNBA-relevant time zones for the settings dropdown. The first entry
+// (`null`) means "use whatever the device reports".
+export const TIME_ZONES: Array<{ value: string | null; label: string; sublabel: string }> = [
+  { value: null, label: "Device default", sublabel: "Use my device's time zone" },
+  { value: "America/New_York", label: "Eastern", sublabel: "America/New_York" },
+  { value: "America/Chicago", label: "Central", sublabel: "America/Chicago" },
+  { value: "America/Denver", label: "Mountain", sublabel: "America/Denver" },
+  { value: "America/Phoenix", label: "Arizona", sublabel: "America/Phoenix · no DST" },
+  { value: "America/Los_Angeles", label: "Pacific", sublabel: "America/Los_Angeles" },
+  { value: "America/Anchorage", label: "Alaska", sublabel: "America/Anchorage" },
+  { value: "Pacific/Honolulu", label: "Hawaii", sublabel: "Pacific/Honolulu" },
+  { value: "America/Toronto", label: "Toronto", sublabel: "America/Toronto" },
+  { value: "Europe/London", label: "London", sublabel: "Europe/London" },
+  { value: "Europe/Paris", label: "Central Europe", sublabel: "Europe/Paris" },
+  { value: "UTC", label: "UTC", sublabel: "Coordinated Universal Time" },
+];
 
 export const FONT_SCALE_MIN = 0.85;
 export const FONT_SCALE_MAX = 1.5;
@@ -42,6 +62,7 @@ export const useAppStore = create<AppState>()(
       favoriteTeamId: null,
       notificationsEnabled: false,
       fontScale: 1,
+      timeZone: null,
 
       setSelectedGame: (id) => set({ selectedGameId: id }),
 
@@ -71,6 +92,8 @@ export const useAppStore = create<AppState>()(
       decreaseFontScale: () =>
         set((s) => ({ fontScale: clampScale(s.fontScale - FONT_SCALE_STEP) })),
       resetFontScale: () => set({ fontScale: 1 }),
+
+      setTimeZone: (zone) => set({ timeZone: zone }),
     }),
     { name: "wnba-synccourt-v1" }
   )

@@ -7,18 +7,23 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 
 ## Features
 
-- **Live games dashboard** (`/`) — every WNBA game today with live scores, period/clock, and team-color theming.
+- **Live games dashboard** (`/`) — every WNBA game today with live scores, period/clock, and team-color theming. Cards involving your favorite team get a soft yellow accent.
 - **Game page** (`/game/[id]`)
   - **Animated scoreboard** with team-color theming, large team-logo watermarks, and timeout dot trackers. The team-logo rings are clickable links to each team's page.
   - **Spoiler veil aware:** when broadcast delay or TV-sync mode is active, both the score and a second clock above the live one (yellow for delay, blue for TV-synced) display the **delayed** state. The live clock and live period stay visible underneath as a faded reference.
   - **Play-by-play feed** with player avatars, team-logo background watermarks, and a "Today's Stats" modal that opens when you tap an avatar.
   - **Live box score** with sortable columns (PTS / REB / AST / STL / BLK / TO / PF / FG / 3PT / FT / MIN) plus an Impact composite. Each player row's photo + name links to the full player page; clicking the stat cells opens the quick-look modal.
-  - **Shot chart** — proper half-court SVG with WNBA geometry (16×19 ft lane, 22.15 ft uniform 3-pt arc), filled-dot makes / X-mark misses **color-coded by team**, per-team FG and 3PT summaries at the top, Team / Result / Period filter chips, and a **time scrubber** that lets you replay shots up to any moment in game time. Pinning the slider to the right keeps it on the live (veil-respecting) edge.
+  - **Shot chart** — proper half-court SVG with WNBA geometry (16×19 ft lane, 22.15 ft uniform 3-pt arc), filled-dot makes / X-mark misses **color-coded by team**, per-team FG and 3PT summaries at the top, Team / Result / Period / **Player** filters, and a **time scrubber** with Q1/Q2/Q3/Q4/OT/Live tick markers (clickable to jump). Pinning the slider to the right keeps it on the live (veil-respecting) edge.
 - **Spoiler veil** — broadcast delay slider that buffers plays so play-by-play can be replayed alongside a delayed TV feed.
-- **Teams browser** (`/teams`) — every WNBA team as a color-themed card with a search dropdown that finds any player by first or last name.
+- **Teams browser** (`/teams`) — every WNBA team as a color-themed card with a search dropdown that finds any player by first or last name. Favorite team's card and favorite team's players in search results are tinted yellow.
 - **Team page** (`/teams/[teamId]`) — team header with record + standing, full roster sorted MVP → bench by season PPG, with 🏆🥈🥉 podium emojis for the top 3 scorers and 🐣 / 🤕 markers for rookies and currently-injured players.
 - **Player page** (`/teams/[teamId]/players/[playerId]`) — large headshot, position, team, health/injury status (with body part, side, and estimated return date when available), season averages with hover-to-reveal stat names, ESPN news section (with thumbnails, descriptions, source link, and relative timestamps).
-- **League leaderboards** (`/leaders/[stat]`) — click any stat on a player page (PTS, REB, AST, FG%, etc.) to see the league-wide ranking with podium emojis for the top 3.
+- **League leaderboards** (`/leaders/[stat]`) — click any stat on a player page (PTS, REB, AST, FG%, etc.) to see the league-wide ranking with podium emojis for the top 3. Favorite team's players are tinted yellow.
+- **Schedule** (`/schedule`) — upcoming games for the next 30 days, grouped by date in the user-selected time zone. Each card shows the visiting + home team logos, tip-off time, venue, city, and broadcast networks. Games involving your favorite team get a yellow accent.
+- **Settings** (`/settings`) — accessed via the cog icon in the navbar:
+  - **Font size** (85% – 150%) applied at the root html font-size; scales every rem-based UI element across every page. Persisted across reloads.
+  - **Time zone** dropdown (Eastern / Central / Mountain / Pacific / etc., or device default). Drives all date/time displays on the schedule page.
+  - **Favorite team** dropdown — picks one WNBA team for personalized highlights. The team and its players are tinted **light yellow** in lists across the app (teams grid, schedule, leaderboards, search, home page game cards).
 
 ## Tech stack
 
@@ -129,19 +134,22 @@ app/
 ├─ teams/[teamId]/page.tsx          team detail + roster
 ├─ teams/[teamId]/players/[id]/page.tsx   player profile + season averages + news
 ├─ leaders/[stat]/page.tsx          league leaderboard for one stat
+├─ schedule/page.tsx                upcoming games (TZ-aware, grouped by date)
+├─ settings/page.tsx                font size, time zone, favorite team
 └─ api/wnba/                        ESPN proxy routes
-   ├─ scoreboard, summary, headshot, headshots/refresh
+   ├─ scoreboard, summary, schedule, headshot, headshots/refresh
    ├─ teams, teams/[id], teams/[id]/leaders
    ├─ athletes/[id], players (aggregated), injuries, leaders
 
 components/
 ├─ Navbar, GameCard, ScoreboardHero, LiveBoxScore, PlayByPlayFeed
-├─ ShotChart (half-court + scrubber), PlayerModal, PlayerSearch
-├─ SpoilerVeilControls, Providers
+├─ ShotChart (half-court + scrubber + player filter), PlayerModal, PlayerSearch
+├─ SpoilerVeilControls, Providers (with FontScaleApplier)
 
 hooks/        useLiveGames, useGameData, useSpoilerDelay
 lib/          espn (types + fetchers), teams (color palette), spoiler-engine, utils
-store/        useAppStore (Zustand) — spoiler/sync mode + delay
+store/        useAppStore (Zustand) — spoiler/sync mode + delay + fontScale +
+              timeZone + favoriteTeamId, all persisted to localStorage
 public/       icon.svg (PWA), manifest.json
 ```
 

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle, Users, Settings as SettingsIcon } from "lucide-react";
+import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle, Users, Settings as SettingsIcon, Calendar } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,7 @@ export default function Navbar() {
   const [refresh, setRefresh] = useState<RefreshStatus>({ kind: "idle" });
   const pathname = usePathname();
   const teamsActive = pathname?.startsWith("/teams") ?? false;
+  const scheduleActive = pathname?.startsWith("/schedule") ?? false;
 
   const veilStatus = (() => {
     if (syncMode === "synced") return { label: "TV Synced", color: "#3b82f6", Icon: Radio, pulse: true };
@@ -101,6 +102,17 @@ export default function Navbar() {
               )}>
               <Users size={13} />
               <span>Teams</span>
+            </Link>
+            <Link
+              href="/schedule"
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border",
+                scheduleActive
+                  ? "text-white border-white/20 bg-white/[0.06]"
+                  : "text-white/45 border-transparent hover:text-white/80 hover:border-white/10",
+              )}>
+              <Calendar size={13} />
+              <span>Schedule</span>
             </Link>
           </nav>
         </div>

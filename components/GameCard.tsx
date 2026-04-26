@@ -2,10 +2,13 @@
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Heart } from "lucide-react";
 import type { ESPNEvent } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity, ordinalPeriod, formatTime } from "@/lib/utils";
+import { useAppStore } from "@/store/useAppStore";
+
+const FAV_YELLOW = "#fde68a";
 
 interface GameCardProps {
   event: ESPNEvent;
@@ -13,6 +16,7 @@ interface GameCardProps {
 
 export default function GameCard({ event }: GameCardProps) {
   const router = useRouter();
+  const favoriteTeamId = useAppStore((s) => s.favoriteTeamId);
   const competition = event.competitions[0];
   if (!competition) return null;
 
@@ -35,6 +39,10 @@ export default function GameCard({ event }: GameCardProps) {
   const homeLeading = homeScore > awayScore;
   const awayLeading = awayScore > homeScore;
 
+  const isFavoriteGame =
+    !!favoriteTeamId &&
+    (home.team.id === favoriteTeamId || away.team.id === favoriteTeamId);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -42,14 +50,33 @@ export default function GameCard({ event }: GameCardProps) {
       whileHover={{ scale: 1.015 }}
       transition={{ duration: 0.2 }}
       onClick={() => router.push(`/game/${event.id}`)}
-      className="cursor-pointer rounded-2xl border overflow-hidden select-none"
+      className="cursor-pointer rounded-2xl border overflow-hidden select-none relative"
       style={{
-        background: "linear-gradient(145deg, #0f0f1a, #161627)",
-        borderColor: isLive ? hexWithOpacity(homeColor, 0.3) : "rgba(255,255,255,0.07)",
-        boxShadow: isLive
-          ? `0 0 24px ${hexWithOpacity(homeColor, 0.12)}`
-          : "0 2px 12px rgba(0,0,0,0.3)",
+        background: isFavoriteGame
+          ? `linear-gradient(145deg, ${hexWithOpacity(FAV_YELLOW, 0.06)}, #161627)`
+          : "linear-gradient(145deg, #0f0f1a, #161627)",
+        borderColor: isFavoriteGame
+          ? hexWithOpacity(FAV_YELLOW, 0.45)
+          : isLive
+            ? hexWithOpacity(homeColor, 0.3)
+            : "rgba(255,255,255,0.07)",
+        boxShadow: isFavoriteGame
+          ? `0 0 18px ${hexWithOpacity(FAV_YELLOW, 0.12)}`
+          : isLive
+            ? `0 0 24px ${hexWithOpacity(homeColor, 0.12)}`
+            : "0 2px 12px rgba(0,0,0,0.3)",
       }}>
+      {isFavoriteGame && (
+        <div
+          className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full flex items-center justify-center"
+          title="Your favorite team is playing"
+          style={{
+            background: hexWithOpacity(FAV_YELLOW, 0.18),
+            border: `1px solid ${hexWithOpacity(FAV_YELLOW, 0.5)}`,
+          }}>
+          <Heart size={9} fill={FAV_YELLOW} className="text-yellow-200" />
+        </div>
+      )}
       {/* Live indicator bar */}
       {isLive && (
         <div className="h-0.5 w-full"

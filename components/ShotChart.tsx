@@ -12,6 +12,9 @@ interface ShotChartProps {
   home: ESPNCompetitor;
   away: ESPNCompetitor;
   teamMap?: Record<string, "home" | "away">;
+  // Optional athlete-id → display-name map (built upstream from the
+  // boxscore). Powers the "filter by player" dropdown.
+  playerNamesById?: Record<string, string>;
 }
 
 // ── Half-court geometry (10 px = 1 ft) ─────────────────────────────────────
@@ -136,16 +139,24 @@ interface Shot {
   isThree: boolean;
   period: number;
   distFt: number;
+  playerId: string | null;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
 type SideFilter = "all" | "home" | "away";
 type ResultFilter = "all" | "made" | "missed";
 
-export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChartProps) {
+export default function ShotChart({
+  plays,
+  home,
+  away,
+  teamMap = {},
+  playerNamesById = {},
+}: ShotChartProps) {
   const [sideFilter, setSideFilter] = useState<SideFilter>("all");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
   const [periodFilter, setPeriodFilter] = useState<number | "all">("all");
+  const [playerFilter, setPlayerFilter] = useState<string>("all");
   const [tooltip, setTooltip] = useState<{
     svgX: number; svgY: number; text: string; color: string;
   } | null>(null);
@@ -181,6 +192,10 @@ export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChart
           away.team.shortDisplayName ?? away.team.displayName,
           teamMap,
         );
+        const playerId =
+          p.participants?.[0]?.athlete?.id ??
+          p.athletes?.[0]?.athlete?.id ??
+          null;
         return {
           play: p,
           svgX,
@@ -190,6 +205,7 @@ export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChart
           isThree,
           period: p.period?.number ?? 1,
           distFt,
+          playerId,
         };
       });
   }, [plays, home, away, teamMap]);
@@ -219,7 +235,30 @@ export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChart
     return `${periodLabel} ${clock}`;
   })();
 
-  // Apply all filters (team + result + period chip + scrubber).
+  // Quarter / OT markers along the scrubber. Each marker sits at the start
+  // of its period and is clickable to jump there.
+  const scrubMarkers = useMemo(() => {
+    if (liveMaxSecs <= 0) return [] as { label: string; secs: number; nextSecs: number | null }[];
+    const QUARTER = 600;
+    const OT = 300;
+    const out: { label: string; secs: number; nextSecs: number | null }[] = [];
+    for (let q = 1; q <= 4; q++) {
+      const start = (q - 1) * QUARTER;
+      if (start <= liveMaxSecs) out.push({ label: `Q${q}`, secs: start, nextSecs: null });
+    }
+    let otIdx = 0;
+    let otStart = 4 * QUARTER;
+    while (otStart <= liveMaxSecs) {
+      otIdx++;
+      out.push({ label: otIdx === 1 ? "OT" : `${otIdx}OT`, secs: otStart, nextSecs: null });
+      otStart += OT;
+    }
+    // Wire up nextSecs so we can highlight the active period.
+    for (let i = 0; i < out.length - 1; i++) out[i].nextSecs = out[i + 1].secs;
+    return out;
+  }, [liveMaxSecs]);
+
+  // Apply all filters (team + result + period chip + player + scrubber).
   const visibleShots = useMemo(() => {
     return allShots.filter((s) => {
       if ((s.play.gameTimeSecs ?? 0) > effectiveScrub) return false;
@@ -227,9 +266,46 @@ export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChart
       if (resultFilter === "made" && !s.made) return false;
       if (resultFilter === "missed" && s.made) return false;
       if (periodFilter !== "all" && s.period !== periodFilter) return false;
+      if (playerFilter !== "all" && s.playerId !== playerFilter) return false;
       return true;
     });
-  }, [allShots, effectiveScrub, sideFilter, resultFilter, periodFilter]);
+  }, [allShots, effectiveScrub, sideFilter, resultFilter, periodFilter, playerFilter]);
+
+  // Players who actually took a shot, with shot count, sorted by team then
+  // most-shots-first within team. Powers the player dropdown.
+  const playerOptions = useMemo(() => {
+    type Entry = { id: string; name: string; side: "home" | "away" | null; count: number };
+    const map = new Map<string, Entry>();
+    for (const s of allShots) {
+      if (!s.playerId) continue;
+      const existing = map.get(s.playerId);
+      if (existing) {
+        existing.count++;
+        if (!existing.side && s.side) existing.side = s.side;
+      } else {
+        map.set(s.playerId, {
+          id: s.playerId,
+          name: playerNamesById[s.playerId] ?? `Player ${s.playerId}`,
+          side: s.side,
+          count: 1,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      // Home team players first, then away, unknown last; within group by name.
+      const order = (e: Entry) => (e.side === "home" ? 0 : e.side === "away" ? 1 : 2);
+      const o = order(a) - order(b);
+      if (o !== 0) return o;
+      return a.name.localeCompare(b.name);
+    });
+  }, [allShots, playerNamesById]);
+
+  // If the active player filter no longer exists in the (rebuilt) options
+  // list, drop back to "all". Avoids a frozen empty chart.
+  useEffect(() => {
+    if (playerFilter === "all") return;
+    if (!playerOptions.some((p) => p.id === playerFilter)) setPlayerFilter("all");
+  }, [playerFilter, playerOptions]);
 
   // Period chip set is data-driven so we don't show empty quarters
   const periods = useMemo(() => {
@@ -310,54 +386,107 @@ export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChart
       </div>
 
       {/* Time scrubber — drag to replay shots up to a moment in game time.
-          Anchors to the live (veil-respecting) edge when at the right end. */}
+          Anchors to the live (veil-respecting) edge when at the right end.
+          Quarter / OT tick marks sit above the track and are clickable to
+          jump to the start of that period. */}
       {liveMaxSecs > 0 && (
         <div
-          className="flex items-center gap-3 px-3 py-2 rounded-xl border"
+          className="px-3 py-2 rounded-xl border"
           style={{
             background: "rgba(255,255,255,0.025)",
             borderColor: "rgba(255,255,255,0.08)",
           }}>
-          <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold shrink-0">
-            Time
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={liveMaxSecs}
-            step={1}
-            value={effectiveScrub}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              // Snap to "live" mode when dragged to the very end so the
-              // chart auto-tracks new plays as they're un-veiled.
-              if (v >= liveMaxSecs - 1) setScrubSecs(null);
-              else setScrubSecs(v);
-            }}
-            aria-label="Scrub through game time"
-            className="flex-1 accent-purple-500 cursor-pointer"
-          />
-          <div className="text-[12px] tabular-nums font-mono text-white/80 min-w-[58px] text-right">
-            {scrubLabel}
-          </div>
-          {isLive ? (
-            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest"
-              style={{
-                background: "rgba(34,197,94,0.12)",
-                color: "#22c55e",
-                border: "1px solid rgba(34,197,94,0.35)",
-              }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-live" />
-              Live
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold shrink-0">
+              Time
             </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setScrubSecs(null)}
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border border-white/15 text-white/55 hover:text-white/85 hover:border-white/30 transition-colors">
-              Go Live
-            </button>
-          )}
+            <div className="flex-1 flex flex-col gap-1 min-w-0">
+              {/* Quarter markers — clickable to jump */}
+              <div className="relative h-3.5 select-none">
+                {scrubMarkers.map((m) => {
+                  const pct = (m.secs / liveMaxSecs) * 100;
+                  const active =
+                    !isLive &&
+                    effectiveScrub >= m.secs &&
+                    (m.nextSecs == null || effectiveScrub < m.nextSecs);
+                  return (
+                    <button
+                      type="button"
+                      key={m.label}
+                      onClick={() => setScrubSecs(m.secs)}
+                      className="absolute top-0 -translate-x-1/2 flex flex-col items-center gap-0.5 cursor-pointer group"
+                      style={{ left: `${pct}%` }}
+                      aria-label={`Jump to start of ${m.label}`}
+                      title={`Jump to start of ${m.label}`}>
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-widest leading-none transition-colors"
+                        style={{
+                          color: active ? "#a855f7" : "rgba(255,255,255,0.4)",
+                        }}>
+                        {m.label}
+                      </span>
+                      <span
+                        className="block w-px h-1.5 transition-colors"
+                        style={{
+                          background: active ? "#a855f7" : "rgba(255,255,255,0.25)",
+                        }}
+                      />
+                    </button>
+                  );
+                })}
+                {/* "Live" anchor at the right edge */}
+                <div
+                  className="absolute top-0 -translate-x-1/2 flex flex-col items-center gap-0.5"
+                  style={{ left: "100%" }}
+                  aria-hidden>
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-widest leading-none"
+                    style={{ color: isLive ? "#22c55e" : "rgba(255,255,255,0.4)" }}>
+                    Live
+                  </span>
+                  <span
+                    className="block w-px h-1.5"
+                    style={{ background: isLive ? "#22c55e" : "rgba(255,255,255,0.25)" }}
+                  />
+                </div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={liveMaxSecs}
+                step={1}
+                value={effectiveScrub}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (v >= liveMaxSecs - 1) setScrubSecs(null);
+                  else setScrubSecs(v);
+                }}
+                aria-label="Scrub through game time"
+                className="w-full accent-purple-500 cursor-pointer"
+              />
+            </div>
+            <div className="text-[12px] tabular-nums font-mono text-white/80 min-w-[58px] text-right shrink-0">
+              {scrubLabel}
+            </div>
+            {isLive ? (
+              <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest shrink-0"
+                style={{
+                  background: "rgba(34,197,94,0.12)",
+                  color: "#22c55e",
+                  border: "1px solid rgba(34,197,94,0.35)",
+                }}>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-live" />
+                Live
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setScrubSecs(null)}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border border-white/15 text-white/55 hover:text-white/85 hover:border-white/30 transition-colors shrink-0">
+                Go Live
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -397,6 +526,36 @@ export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChart
             onChange={(v) => setPeriodFilter(v === "all" ? "all" : parseInt(v, 10))}
           />
         )}
+
+        {playerOptions.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">
+              Player
+            </span>
+            <select
+              value={playerFilter}
+              onChange={(e) => setPlayerFilter(e.target.value)}
+              className="text-[11px] font-semibold rounded-lg border border-white/[0.07] bg-white/[0.02] text-white/85 px-2 py-1 max-w-[180px] hover:border-white/20 transition-colors cursor-pointer focus:outline-none focus:border-white/30"
+              style={{ colorScheme: "dark" }}
+              aria-label="Filter by player">
+              <option value="all">Everyone</option>
+              {playerOptions.map((p) => {
+                const teamLabel =
+                  p.side === "home"
+                    ? home.team.shortDisplayName ?? "Home"
+                    : p.side === "away"
+                      ? away.team.shortDisplayName ?? "Away"
+                      : "—";
+                return (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.count}) · {teamLabel}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+
         <span className="text-[11px] text-white/30 ml-auto">
           {visibleShots.length} of {allShots.length} shots
         </span>

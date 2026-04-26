@@ -83,6 +83,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     return { playerById: byId, playerLookup: lookup };
   }, [boxscore]);
 
+  // Plain id → display-name map for the shot-chart player filter.
+  const playerNamesById = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [id, entry] of Object.entries(playerById)) {
+      const name = entry.stats.athlete.displayName;
+      if (name) out[id] = name;
+    }
+    return out;
+  }, [playerById]);
+
   // Build athlete ID → "home"|"away" map from boxscore (play refs often lack team data)
   const teamMap = useMemo(() => {
     const map: Record<string, "home" | "away"> = {};
@@ -267,6 +277,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   home={home}
                   away={away}
                   teamMap={teamMap}
+                  playerNamesById={playerNamesById}
                 />
               )}
             </motion.div>

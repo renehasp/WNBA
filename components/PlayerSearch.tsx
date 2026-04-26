@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Search, X } from "lucide-react";
+import { Heart, Search, X } from "lucide-react";
 import {
   fetchAllPlayers,
   getAthleteHeadshotById,
@@ -11,11 +11,14 @@ import {
 } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
+import { useAppStore } from "@/store/useAppStore";
 
 const MAX_RESULTS = 10;
+const FAV_YELLOW = "#fde68a";
 
 export default function PlayerSearch() {
   const router = useRouter();
+  const favoriteTeamId = useAppStore((s) => s.favoriteTeamId);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(0);
@@ -128,6 +131,7 @@ export default function PlayerSearch() {
               const color = getTeamColor(p.teamAbbr);
               const headshot = p.headshot ?? getAthleteHeadshotById(p.id);
               const isHighlight = i === highlightIdx;
+              const isFavorite = !!favoriteTeamId && p.teamId === favoriteTeamId;
               return (
                 <button
                   key={p.id}
@@ -136,7 +140,18 @@ export default function PlayerSearch() {
                   onClick={() => go(p)}
                   className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                     isHighlight ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
-                  }`}>
+                  }`}
+                  style={
+                    isFavorite
+                      ? {
+                          background: isHighlight
+                            ? hexWithOpacity(FAV_YELLOW, 0.16)
+                            : hexWithOpacity(FAV_YELLOW, 0.08),
+                          borderLeft: `2px solid ${hexWithOpacity(FAV_YELLOW, 0.65)}`,
+                          paddingLeft: "calc(0.75rem - 2px)",
+                        }
+                      : undefined
+                  }>
                   <div
                     className="relative w-9 h-9 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
                     style={{
@@ -168,10 +183,13 @@ export default function PlayerSearch() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">
-                      {p.displayName}
+                    <p className="text-sm font-semibold text-white truncate flex items-center gap-1.5">
+                      {isFavorite && (
+                        <Heart size={11} fill={FAV_YELLOW} className="text-yellow-200 shrink-0" />
+                      )}
+                      <span className="truncate">{p.displayName}</span>
                       {p.jersey && (
-                        <span className="ml-1.5 text-[10px] tabular-nums text-white/35">
+                        <span className="ml-1.5 text-[10px] tabular-nums text-white/35 shrink-0">
                           #{p.jersey}
                         </span>
                       )}

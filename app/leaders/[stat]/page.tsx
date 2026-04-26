@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, Trophy } from "lucide-react";
+import { ArrowLeft, Heart, Loader2, Trophy } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import {
   fetchLeagueLeaders,
@@ -14,6 +14,9 @@ import {
 } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
+import { useAppStore } from "@/store/useAppStore";
+
+const FAV_YELLOW = "#fde68a";
 
 // Map URL slug → ESPN category name + human label.
 const STAT_MAP: Record<
@@ -46,6 +49,8 @@ export default function LeadersPage({ params }: { params: Promise<{ stat: string
   const stat = statRaw.toLowerCase();
   const config = STAT_MAP[stat];
   const unavailable = !config ? NOT_AVAILABLE[stat] : undefined;
+
+  const favoriteTeamId = useAppStore((s) => s.favoriteTeamId);
 
   const leadersQuery = useQuery({
     queryKey: ["league-leaders"],
@@ -190,6 +195,9 @@ export default function LeadersPage({ params }: { params: Promise<{ stat: string
                     : entry.rank === 3
                       ? "🥉"
                       : null;
+              const playerTeamId = player?.teamId ?? entry.teamId;
+              const isFavorite =
+                !!favoriteTeamId && playerTeamId === favoriteTeamId;
               return (
                 <motion.div
                   key={`${entry.athleteId}-${entry.rank}`}
@@ -204,9 +212,14 @@ export default function LeadersPage({ params }: { params: Promise<{ stat: string
                     }
                     className="group flex items-center gap-3 px-3 py-2 rounded-xl border transition-all hover:border-white/20"
                     style={{
-                      background: "rgba(255,255,255,0.02)",
-                      borderColor:
-                        entry.rank <= 3 ? hexWithOpacity(color, 0.3) : "rgba(255,255,255,0.06)",
+                      background: isFavorite
+                        ? hexWithOpacity(FAV_YELLOW, 0.08)
+                        : "rgba(255,255,255,0.02)",
+                      borderColor: isFavorite
+                        ? hexWithOpacity(FAV_YELLOW, 0.45)
+                        : entry.rank <= 3
+                          ? hexWithOpacity(color, 0.3)
+                          : "rgba(255,255,255,0.06)",
                     }}>
                     {/* Rank */}
                     <div className="w-8 text-center shrink-0">
@@ -254,8 +267,13 @@ export default function LeadersPage({ params }: { params: Promise<{ stat: string
 
                     {/* Name + team */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">
-                        {player?.displayName ?? `Player ${entry.athleteId}`}
+                      <p className="text-sm font-semibold text-white truncate flex items-center gap-1.5">
+                        {isFavorite && (
+                          <Heart size={11} fill={FAV_YELLOW} className="text-yellow-200 shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {player?.displayName ?? `Player ${entry.athleteId}`}
+                        </span>
                       </p>
                       <p className="text-xs text-white/40 truncate">
                         {player?.position ? `${player.position} · ` : ""}

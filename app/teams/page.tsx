@@ -3,14 +3,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ChevronRight, Loader2, Users } from "lucide-react";
+import { ChevronRight, Heart, Loader2, Users } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import PlayerSearch from "@/components/PlayerSearch";
 import { fetchTeams, getTeamLogoUrl } from "@/lib/espn";
 import { getTeamColor, getTeamSecondary } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
+import { useAppStore } from "@/store/useAppStore";
+
+const FAV_YELLOW = "#fde68a";
 
 export default function TeamsPage() {
+  const favoriteTeamId = useAppStore((s) => s.favoriteTeamId);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["teams"],
     queryFn: fetchTeams,
@@ -73,6 +77,7 @@ export default function TeamsPage() {
               // Only the first card gets priority — Next's LCP detector picks
               // a single image, and marking many as priority creates new warnings.
               const isLcpCandidate = idx === 0;
+              const isFavorite = team.id === favoriteTeamId;
 
               return (
                 <motion.div
@@ -82,9 +87,23 @@ export default function TeamsPage() {
                     href={`/teams/${team.id}`}
                     className="group relative block rounded-2xl border overflow-hidden transition-all hover:scale-[1.02]"
                     style={{
-                      background: `linear-gradient(135deg, ${hexWithOpacity(color, 0.15)} 0%, ${hexWithOpacity(secondary, 0.08)} 100%)`,
-                      borderColor: hexWithOpacity(color, 0.25),
+                      background: isFavorite
+                        ? `linear-gradient(135deg, ${hexWithOpacity(FAV_YELLOW, 0.18)} 0%, ${hexWithOpacity(color, 0.12)} 100%)`
+                        : `linear-gradient(135deg, ${hexWithOpacity(color, 0.15)} 0%, ${hexWithOpacity(secondary, 0.08)} 100%)`,
+                      borderColor: isFavorite ? hexWithOpacity(FAV_YELLOW, 0.55) : hexWithOpacity(color, 0.25),
+                      boxShadow: isFavorite ? `0 0 24px ${hexWithOpacity(FAV_YELLOW, 0.15)}` : undefined,
                     }}>
+                    {isFavorite && (
+                      <div
+                        className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center"
+                        title="Your favorite team"
+                        style={{
+                          background: hexWithOpacity(FAV_YELLOW, 0.18),
+                          border: `1px solid ${hexWithOpacity(FAV_YELLOW, 0.55)}`,
+                        }}>
+                        <Heart size={11} fill={FAV_YELLOW} className="text-yellow-200" />
+                      </div>
+                    )}
                     {/* Background watermark — CSS background so it isn't LCP-tracked */}
                     {logoUrl && (
                       <div
