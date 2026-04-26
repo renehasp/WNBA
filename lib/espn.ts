@@ -133,6 +133,15 @@ export interface ESPNPlay {
   scoreValue?: number;
   type?: { id: string; text: string };
   coordinate?: { x: number; y: number };
+  // ESPN puts the acting team's ID directly on the play (this is the most
+  // reliable side-of-the-court signal for the shot chart).
+  team?: { id: string; abbreviation?: string };
+  // Newer endpoints use `participants` instead of `athletes`.
+  participants?: Array<{
+    athlete: ESPNAthleteRef;
+    type?: { text: string; name?: string };
+    order?: number;
+  }>;
   athletes?: Array<{
     athlete: ESPNAthleteRef;
     type?: { text: string; name?: string };

@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { ESPNCompetitor, ESPNStatus } from "@/lib/espn";
@@ -174,9 +175,11 @@ function TeamBlock({
 
   return (
     <div className={`flex flex-col items-center gap-3 ${reverse ? "" : ""}`} style={{ flex: 1 }}>
-      {/* Logo ring */}
-      <div
-        className="rounded-full flex items-center justify-center"
+      {/* Logo ring — click to open the team page */}
+      <Link
+        href={`/teams/${competitor.team.id}`}
+        title={`Open ${competitor.team.displayName} team page`}
+        className="rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
         style={{
           width: "clamp(64px, 12vw, 100px)",
           height: "clamp(64px, 12vw, 100px)",
@@ -199,7 +202,7 @@ function TeamBlock({
             {abbr.slice(0, 2)}
           </span>
         )}
-      </div>
+      </Link>
 
       {/* Team name */}
       <div className="text-center">

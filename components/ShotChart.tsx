@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ProcessedPlay } from "@/lib/spoiler-engine";
+import { gameTimeSecsToDisplay } from "@/lib/spoiler-engine";
 import type { ESPNCompetitor } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
-import { hexWithOpacity } from "@/lib/utils";
+import { hexWithOpacity, cn } from "@/lib/utils";
 
 interface ShotChartProps {
   plays: ProcessedPlay[];
@@ -13,271 +14,547 @@ interface ShotChartProps {
   teamMap?: Record<string, "home" | "away">;
 }
 
-// ── Full-court SVG constants ───────────────────────────────────────────────
-const W = 500;
-const H = 940;         // full court: ~2× half
-const BX = W / 2;     // basket center X
-const H_BY = H - 52;  // home basket Y (bottom)
-const A_BY = 52;      // away basket Y (top)
-const KEY_W = 160;
-const KEY_H = 190;
-const KEY_X = (W - KEY_W) / 2;
-const FT_R = 60;
-const THREE_R = 222;
-const CRN_X = 30;     // corner 3PT line x offset from edge
-// y-offset where the 3PT arc meets the corner line
-const CRN_DY = Math.sqrt(Math.max(0, THREE_R ** 2 - (BX - CRN_X) ** 2));
+// ── Half-court geometry (10 px = 1 ft) ─────────────────────────────────────
+const W = 500;            // court width  = 50 ft
+const H = 470;            // half-court depth = 47 ft
+const BX = 250;           // basket center X (court middle)
+const BY = 425;           // basket center Y (4.5 ft from baseline)
+const BASELINE_Y = 470;
+const LANE_W = 160;       // 16 ft
+const LANE_H = 190;       // 19 ft
+const LANE_X = (W - LANE_W) / 2;
+const LANE_TOP_Y = BASELINE_Y - LANE_H;
+const FT_R = 60;          // free-throw circle radius (6 ft)
+const THREE_R = 221.5;    // WNBA 3-pt radius (22.15 ft) — uniform
+const RIM_R = 9;          // 18 in. rim diameter ≈ 1.5 ft
+
+// ESPN uses INT_MIN-ish sentinels for "no coordinate". Anything that absurd
+// is invalid; valid shot coords are within the half-court.
+function isValidCoord(c: { x: number; y: number } | undefined): c is { x: number; y: number } {
+  if (!c) return false;
+  if (Math.abs(c.x) > 200 || Math.abs(c.y) > 200) return false;
+  if (c.x < 0 || c.y < 0) return false;
+  return true;
+}
 
 // ── Court SVG ─────────────────────────────────────────────────────────────
-function FullCourt({ homeColor, awayColor }: { homeColor: string; awayColor: string }) {
-  const hc = hexWithOpacity(homeColor, 0.5);
-  const ac = hexWithOpacity(awayColor, 0.5);
-  const line = "rgba(255,255,255,0.13)";
-  const lineFaint = "rgba(255,255,255,0.07)";
+function HalfCourt() {
+  const line = "rgba(255,255,255,0.18)";
+  const lineFaint = "rgba(255,255,255,0.08)";
 
   return (
     <g>
-      {/* Background */}
+      {/* Background + border */}
       <rect x={0} y={0} width={W} height={H} rx={10} fill="#0c0c1c" />
-      {/* Court border */}
-      <rect x={2} y={2} width={W - 4} height={H - 4} rx={8}
-        fill="none" stroke={line} strokeWidth={2} />
+      <rect x={1.5} y={1.5} width={W - 3} height={H - 3} rx={9}
+        fill="none" stroke={line} strokeWidth={1.5} />
 
-      {/* Half-court line */}
-      <line x1={2} y1={H / 2} x2={W - 2} y2={H / 2} stroke={line} strokeWidth={1.5} />
-      {/* Center circles */}
-      <circle cx={BX} cy={H / 2} r={62} fill="none" stroke={lineFaint} strokeWidth={1.5} />
-      <circle cx={BX} cy={H / 2} r={20} fill="none" stroke={lineFaint} strokeWidth={1} />
+      {/* Mid-court line (top edge) and circle hint */}
+      <line x1={0} y1={4} x2={W} y2={4} stroke={lineFaint} strokeWidth={1.5} />
+      <path d={`M ${BX - 60} 4 A 60 60 0 0 0 ${BX + 60} 4`}
+        fill="none" stroke={lineFaint} strokeWidth={1.2} />
 
-      {/* ── HOME basket (bottom) ── */}
-      <rect x={KEY_X} y={H_BY - KEY_H} width={KEY_W} height={KEY_H}
-        fill={hexWithOpacity(homeColor, 0.04)} stroke={line} strokeWidth={1.5} />
-      <circle cx={BX} cy={H_BY - KEY_H} r={FT_R}
-        fill="none" stroke={line} strokeWidth={1.5} strokeDasharray="6 5" />
-      <path
-        d={`M ${CRN_X} ${H_BY} L ${CRN_X} ${H_BY - CRN_DY} A ${THREE_R} ${THREE_R} 0 0 1 ${W - CRN_X} ${H_BY - CRN_DY} L ${W - CRN_X} ${H_BY}`}
-        fill="none" stroke={line} strokeWidth={2} />
-      <path d={`M ${BX - 40} ${H_BY} A 40 40 0 0 1 ${BX + 40} ${H_BY}`}
+      {/* Lane (key) */}
+      <rect x={LANE_X} y={LANE_TOP_Y} width={LANE_W} height={LANE_H}
+        fill="rgba(255,255,255,0.025)" stroke={line} strokeWidth={1.5} />
+
+      {/* Free-throw circle — solid top half (in the key), dashed bottom (outside) */}
+      <path d={`M ${BX - FT_R} ${LANE_TOP_Y} A ${FT_R} ${FT_R} 0 0 1 ${BX + FT_R} ${LANE_TOP_Y}`}
+        fill="none" stroke={line} strokeWidth={1.5} />
+      <path d={`M ${BX - FT_R} ${LANE_TOP_Y} A ${FT_R} ${FT_R} 0 0 0 ${BX + FT_R} ${LANE_TOP_Y}`}
+        fill="none" stroke={line} strokeWidth={1.2} strokeDasharray="6 5" />
+
+      {/* 3-point arc (uniform 22.15 ft from basket center) */}
+      <path d={`M ${BX - THREE_R} ${BY} A ${THREE_R} ${THREE_R} 0 0 1 ${BX + THREE_R} ${BY}`}
+        fill="none" stroke={line} strokeWidth={1.8} />
+
+      {/* Restricted area arc (4 ft) */}
+      <path d={`M ${BX - 40} ${BY} A 40 40 0 0 1 ${BX + 40} ${BY}`}
         fill="none" stroke={lineFaint} strokeWidth={1} />
-      <circle cx={BX} cy={H_BY} r={14} fill="none" stroke={hc} strokeWidth={2} />
-      <circle cx={BX} cy={H_BY} r={3.5} fill={hc} />
-      <line x1={BX - 26} y1={H_BY + 13} x2={BX + 26} y2={H_BY + 13}
-        stroke="rgba(255,255,255,0.35)" strokeWidth={3} strokeLinecap="round" />
 
-      {/* ── AWAY basket (top) ── */}
-      <rect x={KEY_X} y={A_BY} width={KEY_W} height={KEY_H}
-        fill={hexWithOpacity(awayColor, 0.04)} stroke={line} strokeWidth={1.5} />
-      <circle cx={BX} cy={A_BY + KEY_H} r={FT_R}
-        fill="none" stroke={line} strokeWidth={1.5} strokeDasharray="6 5" />
-      <path
-        d={`M ${CRN_X} ${A_BY} L ${CRN_X} ${A_BY + CRN_DY} A ${THREE_R} ${THREE_R} 0 0 0 ${W - CRN_X} ${A_BY + CRN_DY} L ${W - CRN_X} ${A_BY}`}
-        fill="none" stroke={line} strokeWidth={2} />
-      <path d={`M ${BX - 40} ${A_BY} A 40 40 0 0 0 ${BX + 40} ${A_BY}`}
-        fill="none" stroke={lineFaint} strokeWidth={1} />
-      <circle cx={BX} cy={A_BY} r={14} fill="none" stroke={ac} strokeWidth={2} />
-      <circle cx={BX} cy={A_BY} r={3.5} fill={ac} />
-      <line x1={BX - 26} y1={A_BY - 13} x2={BX + 26} y2={A_BY - 13}
-        stroke="rgba(255,255,255,0.35)" strokeWidth={3} strokeLinecap="round" />
+      {/* Backboard */}
+      <line x1={BX - 30} y1={BY + 12} x2={BX + 30} y2={BY + 12}
+        stroke="rgba(255,255,255,0.4)" strokeWidth={3} strokeLinecap="round" />
+      {/* Rim */}
+      <circle cx={BX} cy={BY} r={RIM_R}
+        fill="none" stroke="rgba(252,165,3,0.85)" strokeWidth={2} />
     </g>
   );
 }
 
-// ── Team detection ────────────────────────────────────────────────────────
-// Uses boxscore-derived teamMap first (most reliable), then falls back to
-// the athlete.team field which ESPN often omits from play refs.
-function getTeam(
+// ── Helpers ───────────────────────────────────────────────────────────────
+function detectSide(
   play: ProcessedPlay,
   homeAbbr: string,
   awayAbbr: string,
   homeId: string,
   awayId: string,
+  homeName: string,
+  awayName: string,
   teamMap: Record<string, "home" | "away">,
 ): "home" | "away" | null {
-  const athleteId = play.athletes?.[0]?.athlete?.id;
+  // 1. ESPN puts the acting team's ID directly on the play — the most
+  //    reliable signal. This is what was missing before.
+  if (play.team?.id) {
+    if (play.team.id === homeId) return "home";
+    if (play.team.id === awayId) return "away";
+    const a = play.team.abbreviation?.toUpperCase();
+    if (a === homeAbbr.toUpperCase()) return "home";
+    if (a === awayAbbr.toUpperCase()) return "away";
+  }
+
+  // 2. Athlete → team map built from boxscore. Try both `participants`
+  //    (newer) and `athletes` (older) shapes.
+  const athleteId =
+    play.participants?.[0]?.athlete?.id ??
+    play.athletes?.[0]?.athlete?.id;
   if (athleteId && teamMap[athleteId]) return teamMap[athleteId];
+
+  // 3. Athlete-embedded team (rarely populated, but check anyway)
   const t = play.athletes?.[0]?.athlete?.team;
-  if (!t) return null;
-  const abbr = t.abbreviation?.toUpperCase();
-  if (abbr === homeAbbr.toUpperCase()) return "home";
-  if (abbr === awayAbbr.toUpperCase()) return "away";
-  if (t.id === homeId) return "home";
-  if (t.id === awayId) return "away";
+  if (t) {
+    const a = t.abbreviation?.toUpperCase();
+    if (a === homeAbbr.toUpperCase()) return "home";
+    if (a === awayAbbr.toUpperCase()) return "away";
+    if (t.id && t.id === homeId) return "home";
+    if (t.id && t.id === awayId) return "away";
+  }
+
+  // 4. Last-resort: scan play text for the team's display name
+  const txt = (play.text ?? "").toLowerCase();
+  if (homeName && txt.includes(homeName.toLowerCase())) return "home";
+  if (awayName && txt.includes(awayName.toLowerCase())) return "away";
   return null;
 }
 
-// ── Coordinate mapping ────────────────────────────────────────────────────
-// ESPN coordinates vary by game: could be feet (-25→25 x, 0→47 y),
-// tenths-of-feet (-250→250 x, 0→470 y), or 0-100 percentage.
-// We auto-detect by inspecting the actual data range and normalize to SVG.
-function buildCoordMapper(shots: Array<{ x: number; y: number }>) {
-  if (shots.length === 0) return (x: number, y: number) => ({ nx: 0.5, ny: 0 });
-
-  const xs = shots.map((s) => s.x);
-  const ys = shots.map((s) => s.y);
-  const xMin = Math.min(...xs);
-  const xMax = Math.max(...xs);
-  const yMax = Math.max(...ys);
-
-  // If x spans negatives → feet or tenths-of-feet centered on basket
-  // Normalize x symmetrically around 0 → map to [0, W]
-  const xRange = xMax - xMin || 1;
-  const normX = (x: number) => Math.max(0, Math.min(1, (x - xMin) / xRange));
-  // y: distance from basket outward → normalize by observed max (0→half-court)
-  const normY = (y: number) => Math.max(0, Math.min(1, y / (yMax || 1)));
-
-  return (x: number, y: number) => ({ nx: normX(x), ny: normY(y) });
+interface Shot {
+  play: ProcessedPlay;
+  svgX: number;
+  svgY: number;
+  side: "home" | "away" | null;
+  made: boolean;
+  isThree: boolean;
+  period: number;
+  distFt: number;
 }
 
-function mapShot(
-  nx: number, ny: number,
-  side: "home" | "away" | null
-) {
-  const svgX = nx * W;
-  const halfH = H / 2 - 52; // usable height per half-court in SVG
-  if (side === "home") return { svgX, svgY: H_BY - ny * halfH };
-  if (side === "away") return { svgX, svgY: A_BY + ny * halfH };
-  // Unknown — stagger near midcourt so they don't all pile up
-  return { svgX, svgY: H / 2 + (nx - 0.5) * 60 };
-}
+// ── Main ──────────────────────────────────────────────────────────────────
+type SideFilter = "all" | "home" | "away";
+type ResultFilter = "all" | "made" | "missed";
 
-interface TooltipData { svgX: number; svgY: number; text: string; color: string }
-
-// ── Main component ────────────────────────────────────────────────────────
 export default function ShotChart({ plays, home, away, teamMap = {} }: ShotChartProps) {
-  const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+  const [sideFilter, setSideFilter] = useState<SideFilter>("all");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
+  const [periodFilter, setPeriodFilter] = useState<number | "all">("all");
+  const [tooltip, setTooltip] = useState<{
+    svgX: number; svgY: number; text: string; color: string;
+  } | null>(null);
 
   const homeColor = getTeamColor(home.team.abbreviation) || "#a855f7";
   const awayColor = getTeamColor(away.team.abbreviation) || "#3b82f6";
 
-  const shotPlays = plays.filter((p) =>
-    p.coordinate?.x !== undefined &&
-    p.coordinate?.y !== undefined &&
-    (p.shootingPlay ||
-      p.scoringPlay ||
-      /three|jumper|layup|dunk|hook|shot|free throw/i.test(p.text ?? ""))
-  );
+  // Build the canonical shot list. Filter for actual shooting plays with a
+  // valid (non-sentinel) coordinate, project to SVG, classify 2/3-pt by
+  // distance from basket center.
+  const allShots: Shot[] = useMemo(() => {
+    return plays
+      .filter((p) => p.shootingPlay === true && isValidCoord(p.coordinate))
+      .map((p) => {
+        const c = p.coordinate!;
+        const svgX = c.x * 10;
+        // ESPN y = distance (ft) from basket toward midcourt; basket sits at SVG cy=BY
+        const svgY = BY - c.y * 10;
+        // Distance from basket in feet (used for 2pt/3pt classification)
+        const dx = c.x - 25;
+        const dy = c.y;
+        const distFt = Math.sqrt(dx * dx + dy * dy);
+        const made = !!p.scoringPlay;
+        const isThree =
+          distFt > 22.05 || /three|3\s*-?\s*pt|3-point/i.test(p.text ?? "");
+        const side = detectSide(
+          p,
+          home.team.abbreviation,
+          away.team.abbreviation,
+          home.team.id,
+          away.team.id,
+          home.team.shortDisplayName ?? home.team.displayName,
+          away.team.shortDisplayName ?? away.team.displayName,
+          teamMap,
+        );
+        return {
+          play: p,
+          svgX,
+          svgY,
+          side,
+          made,
+          isThree,
+          period: p.period?.number ?? 1,
+          distFt,
+        };
+      });
+  }, [plays, home, away, teamMap]);
 
-  if (shotPlays.length === 0) {
+  // Time scrubber. `null` means "follow the live (veil-respecting) edge"; an
+  // explicit number pins the chart to that game-time-seconds value.
+  const [scrubSecs, setScrubSecs] = useState<number | null>(null);
+
+  // Live edge = latest game-time among the (already veil-filtered) plays
+  // passed in. When new plays roll in, this advances.
+  const liveMaxSecs = useMemo(() => {
+    if (allShots.length === 0) return 0;
+    return Math.max(...allShots.map((s) => s.play.gameTimeSecs ?? 0));
+  }, [allShots]);
+
+  // If we were pinned past the live edge (rare — game data shrunk), clamp.
+  useEffect(() => {
+    if (scrubSecs != null && scrubSecs > liveMaxSecs) setScrubSecs(null);
+  }, [scrubSecs, liveMaxSecs]);
+
+  const effectiveScrub = scrubSecs ?? liveMaxSecs;
+  const isLive = scrubSecs === null;
+
+  const scrubLabel = (() => {
+    if (liveMaxSecs <= 0) return "—";
+    const { periodLabel, clock } = gameTimeSecsToDisplay(effectiveScrub);
+    return `${periodLabel} ${clock}`;
+  })();
+
+  // Apply all filters (team + result + period chip + scrubber).
+  const visibleShots = useMemo(() => {
+    return allShots.filter((s) => {
+      if ((s.play.gameTimeSecs ?? 0) > effectiveScrub) return false;
+      if (sideFilter !== "all" && s.side !== sideFilter) return false;
+      if (resultFilter === "made" && !s.made) return false;
+      if (resultFilter === "missed" && s.made) return false;
+      if (periodFilter !== "all" && s.period !== periodFilter) return false;
+      return true;
+    });
+  }, [allShots, effectiveScrub, sideFilter, resultFilter, periodFilter]);
+
+  // Period chip set is data-driven so we don't show empty quarters
+  const periods = useMemo(() => {
+    const s = new Set(allShots.map((sh) => sh.period));
+    return Array.from(s).sort((a, b) => a - b);
+  }, [allShots]);
+
+  if (allShots.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-white/20 text-sm gap-2">
+      <div className="flex flex-col items-center justify-center py-16 text-white/25 text-sm gap-2">
         <span className="text-3xl">🏀</span>
-        <span>No shot coordinate data available for this game.</span>
+        <span>No shot coordinate data available for this game yet.</span>
+        <span className="text-[11px] text-white/20">
+          ESPN posts coordinates a few minutes after each shot — check back during a live game.
+        </span>
       </div>
     );
   }
 
-  // Build coordinate normalizer from actual data ranges
-  const coordMapper = buildCoordMapper(shotPlays.map((p) => p.coordinate!));
+  // FG% per team (using ALL shots, not filtered, so the summary is constant)
+  const totals = allShots.reduce(
+    (acc, s) => {
+      const k = s.side ?? "unknown";
+      if (!acc[k]) acc[k] = { att: 0, made: 0, threes: 0, threesMade: 0 };
+      acc[k].att++;
+      if (s.made) acc[k].made++;
+      if (s.isThree) {
+        acc[k].threes++;
+        if (s.made) acc[k].threesMade++;
+      }
+      return acc;
+    },
+    {} as Record<string, { att: number; made: number; threes: number; threesMade: number }>,
+  );
 
-  // Stats counters
-  let homeMakes = 0, homeAttempts = 0, awayMakes = 0, awayAttempts = 0;
-
-  const shots = shotPlays.map((play, i) => {
-    const coord = play.coordinate!;
-    const side = getTeam(play, home.team.abbreviation, away.team.abbreviation, home.team.id, away.team.id, teamMap);
-    const { nx, ny } = coordMapper(coord.x, coord.y);
-    const { svgX, svgY } = mapShot(nx, ny, side);
-    const text = play.text ?? "";
-    const made = play.shotMade ?? play.scoringPlay ?? !text.toLowerCase().includes("missed");
-    const color = side === "home" ? homeColor : side === "away" ? awayColor : "rgba(255,255,255,0.3)";
-    const isThree = /three|3-point/i.test(text);
-    const r = isThree ? 7.5 : 5.5;
-
-    if (side === "home") { homeAttempts++; if (made) homeMakes++; }
-    if (side === "away") { awayAttempts++; if (made) awayMakes++; }
-
-    return { play, svgX, svgY, made, color, r, i };
-  });
+  const teamsForSummary: Array<{
+    key: "home" | "away"; name: string; color: string; t: { att: number; made: number; threes: number; threesMade: number };
+  }> = [
+    {
+      key: "home",
+      name: home.team.shortDisplayName ?? home.team.displayName,
+      color: homeColor,
+      t: totals.home ?? { att: 0, made: 0, threes: 0, threesMade: 0 },
+    },
+    {
+      key: "away",
+      name: away.team.shortDisplayName ?? away.team.displayName,
+      color: awayColor,
+      t: totals.away ?? { att: 0, made: 0, threes: 0, threesMade: 0 },
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-3">
-      {/* FG% summary */}
-      <div className="flex gap-3">
-        {[
-          { label: home.team.shortDisplayName, color: homeColor, makes: homeMakes, att: homeAttempts },
-          { label: away.team.shortDisplayName, color: awayColor, makes: awayMakes, att: awayAttempts },
-        ].map(({ label, color, makes, att }) => (
-          <div key={label} className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border"
-            style={{ background: hexWithOpacity(color, 0.06), borderColor: hexWithOpacity(color, 0.2) }}>
-            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-            <span className="text-xs font-semibold" style={{ color }}>{label}</span>
-            <span className="text-xs text-white/40 ml-auto font-mono">
-              {makes}/{att} · {att > 0 ? Math.round((makes / att) * 100) : 0}%
-            </span>
+      {/* Per-team FG summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {teamsForSummary.map(({ key, name, color, t }) => {
+          const pct = t.att ? Math.round((t.made / t.att) * 100) : 0;
+          const threePct = t.threes ? Math.round((t.threesMade / t.threes) * 100) : 0;
+          return (
+            <div key={key} className="flex items-center gap-3 px-3 py-2 rounded-xl border"
+              style={{ background: hexWithOpacity(color, 0.08), borderColor: hexWithOpacity(color, 0.25) }}>
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+              <span className="text-xs font-bold" style={{ color }}>{name}</span>
+              <div className="ml-auto flex items-center gap-3 text-[11px] tabular-nums">
+                <span className="text-white/70 font-semibold">
+                  {t.made}/{t.att}{" "}
+                  <span className="text-white/40">FG · {pct}%</span>
+                </span>
+                <span className="text-white/45">
+                  {t.threesMade}/{t.threes}{" "}
+                  <span className="text-white/30">3PT · {threePct}%</span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Time scrubber — drag to replay shots up to a moment in game time.
+          Anchors to the live (veil-respecting) edge when at the right end. */}
+      {liveMaxSecs > 0 && (
+        <div
+          className="flex items-center gap-3 px-3 py-2 rounded-xl border"
+          style={{
+            background: "rgba(255,255,255,0.025)",
+            borderColor: "rgba(255,255,255,0.08)",
+          }}>
+          <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold shrink-0">
+            Time
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={liveMaxSecs}
+            step={1}
+            value={effectiveScrub}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              // Snap to "live" mode when dragged to the very end so the
+              // chart auto-tracks new plays as they're un-veiled.
+              if (v >= liveMaxSecs - 1) setScrubSecs(null);
+              else setScrubSecs(v);
+            }}
+            aria-label="Scrub through game time"
+            className="flex-1 accent-purple-500 cursor-pointer"
+          />
+          <div className="text-[12px] tabular-nums font-mono text-white/80 min-w-[58px] text-right">
+            {scrubLabel}
           </div>
-        ))}
+          {isLive ? (
+            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest"
+              style={{
+                background: "rgba(34,197,94,0.12)",
+                color: "#22c55e",
+                border: "1px solid rgba(34,197,94,0.35)",
+              }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-live" />
+              Live
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setScrubSecs(null)}
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest border border-white/15 text-white/55 hover:text-white/85 hover:border-white/30 transition-colors">
+              Go Live
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Filter chips */}
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterGroup
+          label="Team"
+          options={[
+            { value: "all", label: "Both" },
+            { value: "home", label: home.team.shortDisplayName ?? "Home", color: homeColor },
+            { value: "away", label: away.team.shortDisplayName ?? "Away", color: awayColor },
+          ]}
+          value={sideFilter}
+          onChange={(v) => setSideFilter(v as SideFilter)}
+        />
+        <FilterGroup
+          label="Result"
+          options={[
+            { value: "all", label: "All" },
+            { value: "made", label: "Made" },
+            { value: "missed", label: "Missed" },
+          ]}
+          value={resultFilter}
+          onChange={(v) => setResultFilter(v as ResultFilter)}
+        />
+        {periods.length > 1 && (
+          <FilterGroup
+            label="Period"
+            options={[
+              { value: "all", label: "All" },
+              ...periods.map((p) => ({
+                value: String(p),
+                label: p > 4 ? `OT${p - 4}` : `Q${p}`,
+              })),
+            ]}
+            value={periodFilter === "all" ? "all" : String(periodFilter)}
+            onChange={(v) => setPeriodFilter(v === "all" ? "all" : parseInt(v, 10))}
+          />
+        )}
+        <span className="text-[11px] text-white/30 ml-auto">
+          {visibleShots.length} of {allShots.length} shots
+        </span>
       </div>
 
       {/* Court SVG */}
       <div className="relative" onMouseLeave={() => setTooltip(null)}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full rounded-xl overflow-hidden"
-          style={{ maxHeight: 680, userSelect: "none" }}>
-          <FullCourt homeColor={homeColor} awayColor={awayColor} />
+          className="w-full rounded-xl"
+          style={{ maxHeight: 640, userSelect: "none", aspectRatio: `${W} / ${H}` }}>
+          <HalfCourt />
 
-          {shots.map(({ play, svgX, svgY, made, color, r, i }) => (
-            <motion.g
-              key={`${play.id}-${i}`}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: i * 0.008, duration: 0.18, type: "spring", stiffness: 400, damping: 20 }}
-              onMouseEnter={() => setTooltip({ svgX, svgY, text: play.text, color })}
-              style={{ cursor: "pointer" }}>
-              {made ? (
-                <>
-                  {/* Glow ring */}
-                  <circle cx={svgX} cy={svgY} r={r + 5} fill={hexWithOpacity(color, 0.12)} />
-                  {/* Fill */}
-                  <circle cx={svgX} cy={svgY} r={r} fill={hexWithOpacity(color, 0.85)} stroke={color} strokeWidth={1.5} />
-                </>
-              ) : (
-                /* X for miss — team colored, not white */
-                <>
-                  <line x1={svgX - r} y1={svgY - r} x2={svgX + r} y2={svgY + r}
-                    stroke={hexWithOpacity(color, 0.55)} strokeWidth={2} strokeLinecap="round" />
-                  <line x1={svgX + r} y1={svgY - r} x2={svgX - r} y2={svgY + r}
-                    stroke={hexWithOpacity(color, 0.55)} strokeWidth={2} strokeLinecap="round" />
-                </>
-              )}
-            </motion.g>
-          ))}
+          <AnimatePresence>
+            {visibleShots.map((s, i) => {
+              const color =
+                s.side === "home" ? homeColor : s.side === "away" ? awayColor : "rgba(255,255,255,0.5)";
+              const r = s.isThree ? 7 : 5.5;
+              return (
+                <motion.g
+                  key={`${s.play.id}-${i}`}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ delay: Math.min(i * 0.005, 0.4), duration: 0.18 }}
+                  style={{ cursor: "pointer" }}
+                  onMouseEnter={() =>
+                    setTooltip({ svgX: s.svgX, svgY: s.svgY, text: s.play.text ?? "", color })
+                  }>
+                  {s.made ? (
+                    <>
+                      {/* Made shot: solid filled circle in team color with halo */}
+                      <circle cx={s.svgX} cy={s.svgY} r={r + 4} fill={hexWithOpacity(color, 0.22)} />
+                      <circle cx={s.svgX} cy={s.svgY} r={r} fill={color}
+                        stroke="#0c0c1c" strokeWidth={1.25} />
+                    </>
+                  ) : (
+                    <>
+                      {/* Missed shot: X mark in the same team color (classic
+                          basketball shot-chart convention). A faint dark
+                          backing keeps the X readable against any court area. */}
+                      <line x1={s.svgX - r} y1={s.svgY - r} x2={s.svgX + r} y2={s.svgY + r}
+                        stroke="rgba(0,0,0,0.55)" strokeWidth={4} strokeLinecap="round" />
+                      <line x1={s.svgX + r} y1={s.svgY - r} x2={s.svgX - r} y2={s.svgY + r}
+                        stroke="rgba(0,0,0,0.55)" strokeWidth={4} strokeLinecap="round" />
+                      <line x1={s.svgX - r} y1={s.svgY - r} x2={s.svgX + r} y2={s.svgY + r}
+                        stroke={color} strokeWidth={2.25} strokeLinecap="round" />
+                      <line x1={s.svgX + r} y1={s.svgY - r} x2={s.svgX - r} y2={s.svgY + r}
+                        stroke={color} strokeWidth={2.25} strokeLinecap="round" />
+                    </>
+                  )}
+                </motion.g>
+              );
+            })}
+          </AnimatePresence>
         </svg>
 
-        {/* Tooltip */}
+        {/* Tooltip pinned to bottom of court */}
         <AnimatePresence>
           {tooltip && (
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-2 rounded-lg text-xs text-white/80 max-w-[280px] text-center pointer-events-none z-10"
-              style={{ background: "#1a1a2e", border: `1px solid ${hexWithOpacity(tooltip.color, 0.4)}` }}>
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-[11px] text-white/85 max-w-[300px] text-center pointer-events-none z-10 shadow-lg"
+              style={{
+                background: "rgba(15,15,26,0.96)",
+                border: `1px solid ${hexWithOpacity(tooltip.color, 0.45)}`,
+              }}>
               {tooltip.text}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center justify-center gap-5 text-xs text-white/35">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full" style={{ background: homeColor }} />
-          <span>{home.team.shortDisplayName}</span>
+      {/* Legend — both makes and misses are team-colored;
+          dot = made, X = missed (classic shot-chart convention). */}
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[11px] text-white/45 mt-1">
+        <div className="flex items-center gap-3">
+          <LegendMarker color={homeColor} kind="made" />
+          <LegendMarker color={homeColor} kind="missed" />
+          <span>{home.team.shortDisplayName ?? "Home"}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full" style={{ background: awayColor }} />
-          <span>{away.team.shortDisplayName}</span>
+        <div className="flex items-center gap-3">
+          <LegendMarker color={awayColor} kind="made" />
+          <LegendMarker color={awayColor} kind="missed" />
+          <span>{away.team.shortDisplayName ?? "Away"}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-white/20" />
-          <span>Make</span>
+        <div className="flex items-center gap-2 ml-2">
+          <LegendMarker color="rgba(255,255,255,0.55)" kind="made" />
+          <span>Made</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-white/30 font-bold">✕</span>
-          <span>Miss</span>
+        <div className="flex items-center gap-2">
+          <LegendMarker color="rgba(255,255,255,0.55)" kind="missed" />
+          <span>Missed</span>
         </div>
       </div>
     </div>
+  );
+}
+
+function FilterGroup({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string; color?: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">{label}</span>
+      <div className="flex items-center gap-1 p-0.5 rounded-lg border border-white/[0.07] bg-white/[0.02]">
+        {options.map((o) => {
+          const active = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onChange(o.value)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                active ? "text-white" : "text-white/45 hover:text-white/70",
+              )}
+              style={{
+                background: active
+                  ? o.color
+                    ? hexWithOpacity(o.color, 0.2)
+                    : "rgba(255,255,255,0.08)"
+                  : "transparent",
+                color: active && o.color ? o.color : undefined,
+              }}>
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LegendMarker({ color, kind }: { color: string; kind: "made" | "missed" }) {
+  if (kind === "made") {
+    return (
+      <span
+        className="inline-block w-3 h-3 rounded-full shrink-0"
+        style={{ background: color, boxShadow: `0 0 0 1px rgba(0,0,0,0.4)` }}
+      />
+    );
+  }
+  // X mark for misses
+  return (
+    <svg width={12} height={12} viewBox="0 0 12 12" className="shrink-0">
+      <line x1={2} y1={2} x2={10} y2={10} stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <line x1={10} y1={2} x2={2} y2={10} stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </svg>
   );
 }
