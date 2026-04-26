@@ -2,6 +2,9 @@
 
 A live WNBA game tracker and roster browser built with Next.js. Pulls live scores, play-by-play, box scores, team rosters, league leaderboards, and player news straight from ESPN's public API — no API keys required.
 
+<img width="1077" height="1751" alt="image" src="https://github.com/user-attachments/assets/de642807-e366-41ca-98ee-964194ea3719" />
+
+
 ## Features
 
 - **Live games dashboard** (`/`) — every WNBA game today with live scores, period/clock, and team-color theming.
@@ -27,6 +30,9 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 - [Zustand](https://github.com/pmndrs/zustand) for spoiler-veil state
 - [Lucide](https://lucide.dev/) icons
 - ESPN's public WNBA endpoints (no key required)
+
+<img width="1062" height="1731" alt="image" src="https://github.com/user-attachments/assets/e110b0f8-df6b-4ec9-b8a1-b77d55d05d4e" />
+
 
 ## Prerequisites
 
@@ -140,6 +146,7 @@ public/       icon.svg (PWA), manifest.json
 ```
 
 ## Data source & attribution
+<img width="1073" height="1281" alt="image" src="https://github.com/user-attachments/assets/d5204def-f2bd-46d9-b4c2-1d8d1e72f555" />
 
 All sports data and images come from [ESPN's public WNBA endpoints](https://www.espn.com/wnba/). News articles link back to the original ESPN article in a new tab. This project is unaffiliated with ESPN or the WNBA.
 
