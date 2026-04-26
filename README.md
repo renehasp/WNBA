@@ -5,7 +5,12 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 ## Features
 
 - **Live games dashboard** (`/`) — every WNBA game today with live scores, period/clock, and team-color theming.
-- **Game page** (`/game/[id]`) — animated scoreboard, play-by-play feed with player avatars and team-logo background watermarks, live box score, shot chart, and a per-player "Today's Stats" modal with a foul indicator and headshot.
+- **Game page** (`/game/[id]`)
+  - **Animated scoreboard** with team-color theming, large team-logo watermarks, and timeout dot trackers. The team-logo rings are clickable links to each team's page.
+  - **Spoiler veil aware:** when broadcast delay or TV-sync mode is active, both the score and a second clock above the live one (yellow for delay, blue for TV-synced) display the **delayed** state. The live clock and live period stay visible underneath as a faded reference.
+  - **Play-by-play feed** with player avatars, team-logo background watermarks, and a "Today's Stats" modal that opens when you tap an avatar.
+  - **Live box score** with sortable columns (PTS / REB / AST / STL / BLK / TO / PF / FG / 3PT / FT / MIN) plus an Impact composite. Each player row's photo + name links to the full player page; clicking the stat cells opens the quick-look modal.
+  - **Shot chart** — proper half-court SVG with WNBA geometry (16×19 ft lane, 22.15 ft uniform 3-pt arc), filled-dot makes / X-mark misses **color-coded by team**, per-team FG and 3PT summaries at the top, Team / Result / Period filter chips, and a **time scrubber** that lets you replay shots up to any moment in game time. Pinning the slider to the right keeps it on the live (veil-respecting) edge.
 - **Spoiler veil** — broadcast delay slider that buffers plays so play-by-play can be replayed alongside a delayed TV feed.
 - **Teams browser** (`/teams`) — every WNBA team as a color-themed card with a search dropdown that finds any player by first or last name.
 - **Team page** (`/teams/[teamId]`) — team header with record + standing, full roster sorted MVP → bench by season PPG, with 🏆🥈🥉 podium emojis for the top 3 scorers and 🐣 / 🤕 markers for rookies and currently-injured players.
@@ -46,11 +51,39 @@ Open [http://localhost:3000](http://localhost:3000) — the dev server hot-reloa
 
 > **Windows users:** there's also a `run.bat` in the project root that runs `npm run dev` if you'd rather double-click it.
 
+## Run on your phone (LAN access)
+
+You can browse the dev server from any phone or tablet on the same Wi-Fi.
+
+1. **Find your PC's local IP** (`ipconfig` on Windows, `ifconfig` / `ip a` on macOS / Linux). Look for an `IPv4 Address` on your Wi-Fi adapter, e.g. `192.168.1.42`.
+2. **Start the dev server bound to all interfaces:**
+   ```bash
+   npm run dev -- -H 0.0.0.0
+   ```
+3. **Allow port 3000 through your firewall.** Windows usually pops a prompt the first time. If you missed it, run this once as admin:
+   ```cmd
+   netsh advfirewall firewall add rule name="Next dev 3000" dir=in action=allow protocol=TCP localport=3000
+   ```
+4. **On your phone**, open `http://192.168.1.42:3000` (your actual IP). HMR works — edit on the PC, the phone refreshes.
+
+`next.config.ts` already lists `192.168.*.*` and `100.64.*.*` (Tailscale CGNAT) under `allowedDevOrigins`, which is required by Next.js 15+ for cross-origin dev resources. Add your own subnet there if needed.
+
+### Install as a PWA on Android
+
+The app ships with a basic web app manifest (`public/manifest.json`) and an SVG icon (`public/icon.svg`).
+
+- Open the app in Chrome on Android.
+- Tap **⋮ menu → Install app** (or **Add to Home screen**).
+- It launches like a standalone app, full-screen, no browser chrome.
+
+For real public-internet access, deploy to [Vercel](https://vercel.com/new) — push `main` and import the repo, no config needed. Vercel gives you a free HTTPS URL accessible anywhere.
+
 ## Available scripts
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Start the Next.js dev server on port 3000. |
+| `npm run dev -- -H 0.0.0.0` | Same, but listening on all network interfaces (for phone / LAN access). |
 | `npm run build` | Production build. |
 | `npm run start` | Run the production build (after `npm run build`). |
 | `npm run lint` | Run ESLint. |
@@ -65,12 +98,27 @@ The proxy routes cache responses (5–60 minutes depending on volatility) so a b
 
 The navbar has a small refresh button that calls `POST /api/wnba/headshots/refresh`. It downloads every WNBA player's headshot to `public/headshots/` so they can be served locally instead of hot-linking ESPN's CDN. The cache directory is gitignored. Missing-headshot URLs are short-circuited with a transparent 1×1 PNG cached for 24h, so dev-server logs stay clean.
 
+### Allowing more LAN devices
+
+If your phone is on a non-standard subnet (a guest network, a VPN, etc.), you'll see a **"Blocked cross-origin request to Next.js dev resource"** warning on first load. Add the host to `next.config.ts`:
+
+```ts
+allowedDevOrigins: [
+  "192.168.1.244",
+  "192.168.*.*",
+  "100.64.*.*",     // Tailscale / CGNAT
+  "10.0.0.*",       // common alternate home subnet
+],
+```
+
+Wildcards work; CIDR ranges (`/24`, etc.) do not — use `*` instead.
+
 ## Project layout
 
 ```
 app/
 ├─ page.tsx                         live games dashboard
-├─ game/[id]/page.tsx               game detail page
+├─ game/[id]/page.tsx               game detail page (scoreboard, plays, box, shot chart)
 ├─ teams/page.tsx                   teams grid + player search
 ├─ teams/[teamId]/page.tsx          team detail + roster
 ├─ teams/[teamId]/players/[id]/page.tsx   player profile + season averages + news
@@ -82,11 +130,13 @@ app/
 
 components/
 ├─ Navbar, GameCard, ScoreboardHero, LiveBoxScore, PlayByPlayFeed
-├─ ShotChart, PlayerModal, PlayerSearch, SpoilerVeilControls, Providers
+├─ ShotChart (half-court + scrubber), PlayerModal, PlayerSearch
+├─ SpoilerVeilControls, Providers
 
 hooks/        useLiveGames, useGameData, useSpoilerDelay
 lib/          espn (types + fetchers), teams (color palette), spoiler-engine, utils
 store/        useAppStore (Zustand) — spoiler/sync mode + delay
+public/       icon.svg (PWA), manifest.json
 ```
 
 ## Data source & attribution
