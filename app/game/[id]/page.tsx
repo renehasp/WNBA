@@ -30,6 +30,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [selectedPlayer, setSelectedPlayer] = useState<{ stats: ESPNPlayerStats; team: ESPNTeam } | null>(null);
 
   const delaySeconds = useAppStore((s) => s.delaySeconds);
+  const syncMode = useAppStore((s) => s.syncMode);
 
   // Get live status from scoreboard to know current period/clock
   const { data: scoreboard } = useLiveGames();
@@ -110,6 +111,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const homeTimeoutsUsed = countTimeouts(home?.team?.id, home?.team?.shortDisplayName);
   const awayTimeoutsUsed = countTimeouts(away?.team?.id, away?.team?.shortDisplayName);
 
+  // Delayed view: latest visible play represents the score/clock the user
+  // should see when the spoiler veil is active. Falls back to live values
+  // when nothing is visible yet (pre-game) or sync is off.
+  const delayedView = useMemo(() => {
+    if (syncMode === "none" || visiblePlays.length === 0) return null;
+    const last = visiblePlays.reduce((a, b) =>
+      b.gameTimeSecs > a.gameTimeSecs ? b : a,
+    );
+    return {
+      awayScore: last.awayScore ?? "0",
+      homeScore: last.homeScore ?? "0",
+      clock: last.clock?.displayValue ?? liveClock,
+      period: last.period?.number ?? livePeriod,
+    };
+  }, [syncMode, visiblePlays, liveClock, livePeriod]);
+
   if (!liveEvent && !isLoading) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -148,6 +165,11 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             broadcasts={broadcasts}
             homeTimeoutsUsed={homeTimeoutsUsed}
             awayTimeoutsUsed={awayTimeoutsUsed}
+            syncMode={syncMode}
+            delayedAwayScore={delayedView?.awayScore}
+            delayedHomeScore={delayedView?.homeScore}
+            delayedClock={delayedView?.clock}
+            delayedPeriod={delayedView?.period}
           />
         ) : (
           <div className="h-48 rounded-2xl skeleton" />

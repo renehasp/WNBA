@@ -6,8 +6,11 @@ import type { ESPNCompetitor, ESPNStatus } from "@/lib/espn";
 import { formatGameClock } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity, ordinalPeriod } from "@/lib/utils";
+import type { SyncMode } from "@/store/useAppStore";
 
 const WNBA_TIMEOUTS_TOTAL = 7;
+const DELAY_COLOR = "#f59e0b"; // amber when broadcast delay is set
+const SYNC_COLOR = "#3b82f6";  // blue when synced to TV
 
 interface ScoreboardHeroProps {
   home: ESPNCompetitor;
@@ -17,6 +20,13 @@ interface ScoreboardHeroProps {
   broadcasts?: string[];
   homeTimeoutsUsed?: number;
   awayTimeoutsUsed?: number;
+  // Spoiler-veil overlay (when active, the displayed scores match these and a
+  // second clock is shown above the live one).
+  syncMode?: SyncMode;
+  delayedAwayScore?: string;
+  delayedHomeScore?: string;
+  delayedClock?: string;
+  delayedPeriod?: number;
 }
 
 function AnimatedScore({ value, color }: { value: string; color: string }) {
@@ -49,7 +59,23 @@ function AnimatedScore({ value, color }: { value: string; color: string }) {
   );
 }
 
-function DigitalClock({ clock, period, isLive }: { clock: string; period: number; isLive: boolean }) {
+function DigitalClock({
+  clock,
+  period,
+  isLive,
+  veiledClock,
+  veiledPeriod,
+  veilColor,
+  veilLabel,
+}: {
+  clock: string;
+  period: number;
+  isLive: boolean;
+  veiledClock?: string;
+  veiledPeriod?: number;
+  veilColor?: string;
+  veilLabel?: string;
+}) {
   const [showColon, setShowColon] = useState(true);
 
   useEffect(() => {
@@ -59,18 +85,45 @@ function DigitalClock({ clock, period, isLive }: { clock: string; period: number
   }, [isLive]);
 
   const { min, sec } = formatGameClock(clock);
+  const veilParts = veiledClock ? formatGameClock(veiledClock) : null;
+  const showVeil = !!(veilParts && veilColor);
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="font-mono font-bold text-white/90 flex items-center"
-        style={{ fontSize: "clamp(1.5rem, 4vw, 2.5rem)" }}>
+      {/* Veiled clock — sits ABOVE the live clock when sync is active.
+          Yellow for delay, blue for TV-synced. */}
+      {showVeil && (
+        <div className="flex flex-col items-center gap-1 mb-0.5">
+          <div className="font-mono font-bold flex items-center leading-none"
+            style={{ fontSize: "clamp(1rem, 2.6vw, 1.6rem)", color: veilColor }}>
+            <span>{veilParts.min}</span>
+            <span className="blink-colon" style={{ opacity: showColon ? 1 : 0.15 }}>:</span>
+            <span>{veilParts.sec}</span>
+          </div>
+          <span className="text-[9px] font-bold px-2 py-[2px] rounded-full uppercase tracking-widest leading-none"
+            style={{
+              background: hexWithOpacity(veilColor!, 0.13),
+              color: veilColor,
+              border: `1px solid ${hexWithOpacity(veilColor!, 0.3)}`,
+            }}>
+            {veilLabel ?? ordinalPeriod(veiledPeriod ?? period)}
+          </span>
+        </div>
+      )}
+
+      {/* Live clock — kept exactly as before. Slightly faded when veil is on. */}
+      <div className="font-mono font-bold flex items-center"
+        style={{
+          fontSize: "clamp(1.5rem, 4vw, 2.5rem)",
+          color: showVeil ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.9)",
+        }}>
         <span>{min}</span>
         <span className={isLive ? "blink-colon" : ""} style={{ opacity: showColon || !isLive ? 1 : 0.15 }}>:</span>
         <span>{sec}</span>
       </div>
       <span className="text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-widest"
         style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.55)" }}>
-        {ordinalPeriod(period)}
+        {showVeil ? `Live · ${ordinalPeriod(period)}` : ordinalPeriod(period)}
       </span>
     </div>
   );
@@ -105,15 +158,19 @@ function TeamBlock({
   competitor,
   timeoutsUsed = 0,
   reverse = false,
+  displayedScore,
 }: {
   competitor: ESPNCompetitor;
   timeoutsUsed?: number;
   reverse?: boolean;
+  // When the spoiler veil is active, the page passes a delayed score that
+  // overrides the live one.
+  displayedScore?: string;
 }) {
   const abbr = competitor.team.abbreviation;
   const teamColor = getTeamColor(abbr) || `#${competitor.team.color || "a855f7"}`;
-  const score = competitor.score || "0";
-  const isWinning = parseInt(competitor.score) > 0;
+  const score = displayedScore ?? competitor.score ?? "0";
+  const isWinning = parseInt(score) > 0;
 
   return (
     <div className={`flex flex-col items-center gap-3 ${reverse ? "" : ""}`} style={{ flex: 1 }}>
@@ -183,7 +240,21 @@ export default function ScoreboardHero({
   broadcasts,
   homeTimeoutsUsed = 0,
   awayTimeoutsUsed = 0,
+  syncMode = "none",
+  delayedAwayScore,
+  delayedHomeScore,
+  delayedClock,
+  delayedPeriod,
 }: ScoreboardHeroProps) {
+  const veilColor =
+    syncMode === "delay" ? DELAY_COLOR : syncMode === "synced" ? SYNC_COLOR : undefined;
+  const veilLabel =
+    syncMode === "delay"
+      ? `Delay · ${ordinalPeriod(delayedPeriod ?? status.period)}`
+      : syncMode === "synced"
+        ? `TV · ${ordinalPeriod(delayedPeriod ?? status.period)}`
+        : undefined;
+  const veilActive = syncMode !== "none" && !!delayedClock;
   const isLive = status.type.state === "in";
   const isFinal = status.type.state === "post";
   const isPre = status.type.state === "pre";
@@ -276,7 +347,11 @@ export default function ScoreboardHero({
       <div className="relative px-4 py-6 sm:px-8 sm:py-8">
         {/* Main scoreboard row */}
         <div className="flex items-end justify-between gap-4">
-          <TeamBlock competitor={away} timeoutsUsed={awayTimeoutsUsed} />
+          <TeamBlock
+            competitor={away}
+            timeoutsUsed={awayTimeoutsUsed}
+            displayedScore={veilActive ? delayedAwayScore : undefined}
+          />
 
           {/* Center: clock + status */}
           <div className="flex flex-col items-center gap-3 shrink-0">
@@ -343,6 +418,10 @@ export default function ScoreboardHero({
                 clock={status.displayClock}
                 period={status.period}
                 isLive={isLive}
+                veiledClock={veilActive ? delayedClock : undefined}
+                veiledPeriod={veilActive ? delayedPeriod : undefined}
+                veilColor={veilActive ? veilColor : undefined}
+                veilLabel={veilActive ? veilLabel : undefined}
               />
             )}
 
@@ -351,7 +430,12 @@ export default function ScoreboardHero({
             </div>
           </div>
 
-          <TeamBlock competitor={home} timeoutsUsed={homeTimeoutsUsed} reverse />
+          <TeamBlock
+            competitor={home}
+            timeoutsUsed={homeTimeoutsUsed}
+            reverse
+            displayedScore={veilActive ? delayedHomeScore : undefined}
+          />
         </div>
 
         {/* Bottom info row */}

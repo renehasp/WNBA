@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import type { ESPNBoxscore, ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { getAthleteHeadshotById } from "@/lib/espn";
@@ -11,7 +12,7 @@ interface LiveBoxScoreProps {
   onPlayerClick?: (stats: ESPNPlayerStats, team: ESPNTeam) => void;
 }
 
-const KEY_STATS = ["PTS", "REB", "AST", "STL", "BLK", "TO", "FG", "3PT", "FT", "MIN"];
+const KEY_STATS = ["PTS", "REB", "AST", "STL", "BLK", "TO", "PF", "FG", "3PT", "FT", "MIN"];
 
 function calcImpact(stats: string[], labels: string[]): number {
   const get = (key: string) => parseFloat(stats[labels.indexOf(key)] ?? "0") || 0;
@@ -132,10 +133,15 @@ export default function LiveBoxScore({ boxscore, onPlayerClick }: LiveBoxScorePr
                     !dnp && "cursor-pointer hover:bg-white/[0.03]",
                     dnp && "opacity-40"
                   )}>
-                  {/* Player cell */}
+                  {/* Player cell — name + picture navigate to the full player page;
+                      the rest of the row still opens the Today's Stats modal. */}
                   <td className="px-3 py-2 sticky left-0" style={{ background: "#0a0a0f" }}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full overflow-hidden shrink-0"
+                    <Link
+                      href={`/teams/${activeTeamStats.team.id}/players/${p.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="group inline-flex items-center gap-2 hover:opacity-90"
+                      title={`${p.displayName} — full profile`}>
+                      <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 transition-transform group-hover:scale-105"
                         style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
                         <Image
                           src={getAthleteHeadshotById(p.id)}
@@ -149,7 +155,9 @@ export default function LiveBoxScore({ boxscore, onPlayerClick }: LiveBoxScorePr
                       </div>
                       <div>
                         <div className="flex items-center gap-1">
-                          <span className="font-semibold text-white/80 leading-none">{p.shortName ?? p.displayName}</span>
+                          <span className="font-semibold text-white/80 leading-none group-hover:underline decoration-white/30 underline-offset-2">
+                            {p.shortName ?? p.displayName}
+                          </span>
                           {isHot && <span title="Hot hand 🔥">🔥</span>}
                           {isStarter && (
                             <span className="text-[9px] px-1 rounded font-bold"
@@ -160,7 +168,7 @@ export default function LiveBoxScore({ boxscore, onPlayerClick }: LiveBoxScorePr
                           <span className="text-[10px] text-white/25">{p.position.abbreviation}</span>
                         )}
                       </div>
-                    </div>
+                    </Link>
                   </td>
 
                   {/* Impact column */}
