@@ -69,8 +69,8 @@ export default function GameCard({ event }: GameCardProps) {
             showScore={!isPre}
           />
 
-          {/* Center: status */}
-          <div className="flex flex-col items-center gap-1 min-w-[56px]">
+          {/* Center: status — shrink-0 so it doesn't squeeze when names are long */}
+          <div className="flex flex-col items-center gap-1 min-w-[56px] shrink-0">
             {isLive && (
               <div className="flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pulse-live" />
@@ -142,7 +142,7 @@ function TeamSide({
 }) {
   const teamColor = getTeamColor(abbr) || color;
   return (
-    <div className={`flex items-center gap-2.5 ${reverse ? "flex-row-reverse" : ""}`}>
+    <div className={`flex items-center gap-2.5 min-w-0 flex-1 ${reverse ? "flex-row-reverse" : ""}`}>
       {/* Logo */}
       <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
         style={{ background: hexWithOpacity(teamColor, 0.12), border: `1px solid ${hexWithOpacity(teamColor, 0.25)}` }}>
@@ -161,9 +161,10 @@ function TeamSide({
           </span>
         )}
       </div>
-      {/* Name + score */}
-      <div className={`flex flex-col ${reverse ? "items-end" : "items-start"}`}>
-        <span className="text-xs font-semibold text-white/70">
+      {/* Name + score — min-w-0 + truncate keeps long names from forcing
+          the card's home-side logo off-screen at large font scales. */}
+      <div className={`flex flex-col min-w-0 ${reverse ? "items-end" : "items-start"}`}>
+        <span className="text-xs font-semibold text-white/70 truncate max-w-full">
           {team.shortDisplayName ?? abbr}
         </span>
         {showScore && (

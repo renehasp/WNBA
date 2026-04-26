@@ -51,7 +51,9 @@ function AnimatedScore({ value, color }: { value: string; color: string }) {
       transition={{ duration: 0.35 }}
       className="tabular-nums font-extrabold leading-none select-none"
       style={{
-        fontSize: "clamp(3rem, 8vw, 6rem)",
+        // Min reduced so the score doesn't blow past its column at higher
+        // font scales / narrow viewports.
+        fontSize: "clamp(2rem, 8vw, 6rem)",
         color,
         textShadow: `0 0 40px ${hexWithOpacity(color, 0.5)}`,
       }}>
@@ -174,15 +176,17 @@ function TeamBlock({
   const isWinning = parseInt(score) > 0;
 
   return (
-    <div className={`flex flex-col items-center gap-3 ${reverse ? "" : ""}`} style={{ flex: 1 }}>
+    <div
+      className={`flex flex-col items-center gap-3 min-w-0 ${reverse ? "" : ""}`}
+      style={{ flex: "1 1 0", minWidth: 0 }}>
       {/* Logo ring — click to open the team page */}
       <Link
         href={`/teams/${competitor.team.id}`}
         title={`Open ${competitor.team.displayName} team page`}
-        className="rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+        className="rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 shrink-0"
         style={{
-          width: "clamp(64px, 12vw, 100px)",
-          height: "clamp(64px, 12vw, 100px)",
+          width: "clamp(56px, 11vw, 100px)",
+          height: "clamp(56px, 11vw, 100px)",
           background: hexWithOpacity(teamColor, 0.1),
           border: `2px solid ${hexWithOpacity(teamColor, 0.35)}`,
           boxShadow: `0 0 32px ${hexWithOpacity(teamColor, 0.2)}, inset 0 0 16px ${hexWithOpacity(teamColor, 0.08)}`,
@@ -204,12 +208,14 @@ function TeamBlock({
         )}
       </Link>
 
-      {/* Team name */}
-      <div className="text-center">
+      {/* Team name — truncate so long names can't push the block past
+          its share of the row at high font scales. */}
+      <div className="text-center w-full min-w-0 px-1">
         <p className="text-xs font-medium text-white/40 uppercase tracking-widest">
           {competitor.homeAway === "home" ? "Home" : "Away"}
         </p>
-        <p className="font-bold text-white text-sm sm:text-base leading-tight">
+        <p className="font-bold text-white text-sm sm:text-base leading-tight truncate"
+          title={competitor.team.displayName}>
           {competitor.team.shortDisplayName || competitor.team.displayName}
         </p>
         <p className="text-xs text-white/30">{abbr}</p>
