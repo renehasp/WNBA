@@ -4,6 +4,14 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 
 <img width="1077" height="1751" alt="image" src="https://github.com/user-attachments/assets/de642807-e366-41ca-98ee-964194ea3719" />
 
+## What's New in v1.1
+
+- **Box score team totals** — a bold Totals row at the bottom of each team's box score aggregates points, rebounds, assists, steals, blocks, turnovers, fouls, FG/3PT/FT fractions, and minutes.
+- **Play-by-play filters** — filter the live play feed by individual player (dropdown) or by play type (multi-select chips: 3PT, Dunk, Steal, Block, etc.). A live count badge shows how many plays match; a Clear button resets everything.
+- **Sticky mini scoreboard** — once you scroll past the main scoreboard on a game page, a compact score bar slides down and sticks to the top, showing team logos, current score, period, and clock. Dismiss it any time with the × button.
+- **Full team names everywhere** — team cards and the scoreboard now show the full name (e.g. *Indiana Fever*) alongside the logo. Clicking the name opens the official WNBA team page in a new tab.
+- **Richer player cards** — the quick-look player modal now includes a Career section: years of WNBA experience, college, hometown, height, and weight, pulled live from ESPN.
+- **New app logo** — replaced the generic basketball icon with a custom SyncCourt mark; updated the PWA icon and navbar.
 
 ## Features
 
@@ -47,14 +55,22 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 ## Getting started
 
 ```bash
-# 1. Clone
+
+# 1. Install OpenJS
+  winget install OpenJS.NodeJS.LTS
+  open a new terminal window after it finishes
+
+# 2. Clone
 git clone https://github.com/renehasp/WNBA.git
-cd WNBA
+CHANGE DIRECTORY TO WNBA-SyncCourt
 
-# 2. Install dependencies
-npm install
+# 3. Install dependencies
+winget install OpenJS.NodeJS.LTS
+  open a new terminal window after it finishes
+  npm install
+  npm audit fix --force
 
-# 3. Start the dev server
+# 4. Start the dev server
 npm run dev
 ```
 

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { ESPNCompetitor, ESPNStatus } from "@/lib/espn";
 import { formatGameClock } from "@/lib/espn";
-import { getTeamColor } from "@/lib/teams";
+import { getTeamColor, getTeamInfo } from "@/lib/teams";
 import { hexWithOpacity, ordinalPeriod } from "@/lib/utils";
 import type { SyncMode } from "@/store/useAppStore";
 
@@ -218,7 +218,7 @@ function TeamBlock({
           title={competitor.team.displayName}>
           {competitor.team.shortDisplayName || competitor.team.displayName}
         </p>
-        <p className="text-xs text-white/30">{abbr}</p>
+        <p className="text-xs text-white/30">{getTeamInfo(abbr)?.city || abbr}</p>
       </div>
 
       {/* Score */}

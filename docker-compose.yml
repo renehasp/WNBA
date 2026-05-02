@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  # Development server with hot reload
+  app-dev:
+    image: node:24-alpine
+    container_name: wnba-synccourt-dev
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - wnba-network
+
+  # Production build and run
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wnba-synccourt-prod
+    ports:
+      - "1997:3000"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - wnba-network
+    profiles:
+      - prod
+
+networks:
+  wnba-network:
+    driver: bridge

@@ -1,2 +1,2 @@
-eccho off
+echo off
 npm run dev
