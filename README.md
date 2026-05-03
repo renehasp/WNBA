@@ -84,6 +84,46 @@ Open [http://localhost:3000](http://localhost:3000) — the dev server hot-reloa
 
 > **Windows users:** there's also a `run.bat` in the project root that runs `npm run dev` if you'd rather double-click it.
 
+## Docker
+
+The project includes a `docker-compose.yml` for both development and production environments.
+
+### Development with Docker
+
+Run the dev server with hot reload inside a container:
+
+```bash
+docker-compose up app-dev
+```
+
+The dev server will start on [http://localhost:3000](http://localhost:3000) and automatically reload when you change files (volumes are mounted for live editing).
+
+### Production with Docker
+
+Build and run the optimized production image:
+
+```bash
+docker-compose --profile prod up app-prod
+```
+
+The production server will be available at [http://localhost:1997](http://localhost:1997).
+
+To rebuild the production image after changes:
+
+```bash
+docker-compose --profile prod up --build app-prod
+```
+
+### Stopping Docker containers
+
+```bash
+# Stop dev server
+docker-compose down
+
+# Stop production server
+docker-compose --profile prod down
+```
+
 ## Run on your phone (LAN access)
 
 You can browse the dev server from any phone or tablet on the same Wi-Fi.
