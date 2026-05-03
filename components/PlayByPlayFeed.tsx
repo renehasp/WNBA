@@ -8,6 +8,24 @@ import type { ESPNCompetitor, ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity, ordinalPeriod } from "@/lib/utils";
 
+// Add global styles for select dropdown theme
+const selectStyles = `
+  select {
+    color-scheme: dark;
+  }
+  select option {
+    background-color: #1a1a2e;
+    color: white;
+  }
+  select option:hover {
+    background-color: #2a2a4e;
+  }
+  select option:checked {
+    background-color: #3a3a5e;
+    color: white;
+  }
+`;
+
 // ── Play classification ───────────────────────────────────────────────────────
 type PlayType =
   | "three_made" | "three_missed"
@@ -642,7 +660,9 @@ export default function PlayByPlayFeed({
   const reversed = [...filtered].reverse();
 
   return (
-    <div className="flex flex-col gap-3">
+    <>
+      <style>{selectStyles}</style>
+      <div className="flex flex-col gap-3">
       {/* Spoiler Veil buffer banner */}
       {bufferedCount > 0 && (
         <motion.div
@@ -793,6 +813,7 @@ export default function PlayByPlayFeed({
             : "No plays yet — game hasn't started or data is loading."}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
