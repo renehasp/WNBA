@@ -50,7 +50,8 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 - [Lucide](https://lucide.dev/) icons
 - ESPN's public WNBA endpoints (no key required)
 
-<img width="1062" height="1731" alt="image" src="https://github.com/user-attachments/assets/e110b0f8-df6b-4ec9-b8a1-b77d55d05d4e" />
+<img width="1465" height="847" alt="image" src="https://github.com/user-attachments/assets/be87a51a-0fe9-469b-80f5-694563864361" />
+
 
 
 ## Prerequisites
@@ -90,6 +91,8 @@ The project includes a `docker-compose.yml` for both development and production 
 
 > **Note:** These commands use `docker compose` (the newer built-in syntax). If you have an older Docker version, use `docker-compose` instead, or install it with `apt install docker-compose` on Ubuntu/Debian or via your package manager.
 
+
+
 ### Development with Docker
 
 Run the dev server with hot reload inside a container:
@@ -101,6 +104,13 @@ docker compose up app-dev
 The dev server will start on [http://localhost:3000](http://localhost:3000) and automatically reload when you change files (volumes are mounted for live editing).
 
 ### Production with Docker
+
+Production pull latest with Docker in ubuntu
+```bash
+git pull origin main && docker compose --profile prod up --build app-prod
+From https://github.com/renehasp/WNBA-SyncCourt
+```
+
 
 Build and run the optimized production image:
 
