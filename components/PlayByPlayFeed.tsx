@@ -303,7 +303,21 @@ function PlayCard({
     const nameParts = playerName.split(" ");
     const lastName = nameParts[nameParts.length - 1];
     const firstInitial = nameParts[0]?.[0];
-    const jersey = athlete?.jersey || play.athletes?.[0]?.athlete?.jersey;
+    const athleteJersey = athlete?.jersey;
+    const playAthletesJersey = play.athletes?.[0]?.athlete?.jersey;
+    const jersey = athleteJersey || playAthletesJersey;
+
+    // DEBUG
+    if (play.text?.includes("Cunningham") || play.text?.includes("Boston")) {
+      console.log("Jersey debug:", {
+        playerName,
+        athleteJersey,
+        playAthletesJersey,
+        jersey,
+        athleteObject: athlete,
+        playAthletesObject: play.athletes?.[0]?.athlete,
+      });
+    }
 
     // Build replacement suffix: "#8 (IND)" or just "(IND)" if no jersey
     const suffix = jersey ? ` #${jersey} (${teamAbbr})` : ` (${teamAbbr})`;
