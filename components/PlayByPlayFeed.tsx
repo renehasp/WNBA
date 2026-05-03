@@ -191,6 +191,7 @@ function PlayCard({
   resolvedTeam,
   resolvedPlayerName,
   resolvedJersey,
+  annotatedText,
 }: {
   play: ProcessedPlay;
   home: ESPNCompetitor;
@@ -203,18 +204,22 @@ function PlayCard({
   resolvedTeam?: ESPNTeam;
   resolvedPlayerName?: string;
   resolvedJersey?: string;
+  annotatedText?: string;
 }) {
-  const athlete = play.athletes?.[0]?.athlete;
+  const playAthlete = play.athletes?.[0]?.athlete;
 
-  // Determine which team this athlete is on (for logo fallback)
-  const athleteTeamId = athlete?.team?.id;
-  const playTeamId = play.team?.id;
-  const teamIdForSide = athleteTeamId || playTeamId;
+  // Side/team driver: prefer the resolved player (the first one mentioned in
+  // the play text) over play.athletes[0], which ESPN sometimes orders by
+  // assister/blocker rather than primary actor.
+  const teamIdForSide =
+    resolvedTeam?.id ?? playAthlete?.team?.id ?? play.team?.id;
   const side: "home" | "away" | null =
     teamIdForSide === home.team.id ? "home"
     : teamIdForSide === away.team.id ? "away"
     : null;
-  const teamLogo = side === "home" ? home.team.logo : side === "away" ? away.team.logo : null;
+  const teamLogo =
+    resolvedTeam?.logo
+    ?? (side === "home" ? home.team.logo : side === "away" ? away.team.logo : null);
 
   // 3-step fallback: headshot → team logo → emoji
   const [avatarState, setAvatarState] = useState<AvatarState>(
@@ -227,10 +232,13 @@ function PlayCard({
   // Play-type color drives card styling (border, shimmer, badge)
   const accentColor = cfg.color;
 
-  // Avatar circle border uses the player's team color (home or away)
-  const athleteTeamAbbr = athlete?.team?.abbreviation;
-  const circleColor = (athleteTeamAbbr ? getTeamColor(athleteTeamAbbr) : null)
+  // Avatar circle border uses the resolved player's team color (the one
+  // whose photo is being shown), falling back to the play's athlete.
+  const avatarTeamAbbr = resolvedTeam?.abbreviation ?? playAthlete?.team?.abbreviation;
+  const circleColor = (avatarTeamAbbr ? getTeamColor(avatarTeamAbbr) : null)
     ?? accentColor;
+  const avatarDisplayName = resolvedPlayerName ?? playAthlete?.displayName;
+  const avatarJersey = resolvedJersey ?? playAthlete?.jersey;
 
   const isHigh   = cfg.importance === "high";
   const isMedium = cfg.importance === "medium";
@@ -259,85 +267,10 @@ function PlayCard({
   const clock = play.clock?.displayValue ?? "";
   const hasScore = play.homeScore !== undefined && play.awayScore !== undefined && play.scoringPlay;
 
-  // Add team name after player name in play text
-  let displayText = play.text ?? "";
-  // Try to get player name from resolved data (most reliable), then athlete data
-  let playerName = resolvedPlayerName || athlete?.displayName;
-
-  // Get team abbreviation with multiple fallbacks
-  let teamAbbr: string | null = null;
-
-  // First try: use resolved team from box score (most reliable when available)
-  if (resolvedTeam?.abbreviation) {
-    teamAbbr = resolvedTeam.abbreviation;
-  }
-  // Second try: use play.team abbreviation directly
-  else if (play.team?.abbreviation) {
-    teamAbbr = play.team.abbreviation;
-  }
-  // Third try: match play.team.id to home/away
-  else if (play.team?.id) {
-    teamAbbr = play.team.id === home.team.id
-      ? home.team.abbreviation
-      : play.team.id === away.team.id
-        ? away.team.abbreviation
-        : null;
-  }
-  // Fourth try: use athlete team data
-  else if (athlete?.team?.abbreviation) {
-    teamAbbr = athlete.team.abbreviation;
-  }
-  // Fifth try: match athlete.team.id to home/away
-  else if (athlete?.team?.id) {
-    teamAbbr = athlete.team.id === home.team.id
-      ? home.team.abbreviation
-      : athlete.team.id === away.team.id
-        ? away.team.abbreviation
-        : null;
-  }
-  // Last resort: use side variable to infer team
-  else if (side) {
-    teamAbbr = side === "home" ? home.team.abbreviation : away.team.abbreviation;
-  }
-
-  // Replace player name with "player #JERSEY (TEAM)" if we have both
-  if (playerName && teamAbbr) {
-    const nameParts = playerName.split(" ");
-    const lastName = nameParts[nameParts.length - 1];
-    const firstInitial = nameParts[0]?.[0];
-    const jersey = resolvedJersey || athlete?.jersey || play.athletes?.[0]?.athlete?.jersey;
-
-    // Build replacement suffix: "#8 (IND)" or just "(IND)" if no jersey
-    const suffix = jersey ? ` #${jersey} (${teamAbbr})` : ` (${teamAbbr})`;
-
-    // Try different name patterns in order of specificity
-    const namePatterns: string[] = [
-      playerName, // Full name: "Raven Johnson"
-      lastName, // Last name: "Johnson"
-    ];
-    if (firstInitial) {
-      namePatterns.push(`${firstInitial}. ${lastName}`, `${firstInitial}.${lastName}`);
-    }
-    const validPatterns = namePatterns.filter((n): n is string => Boolean(n && n.length > 0));
-
-    let replaced = false;
-    for (const pattern of validPatterns) {
-      if (displayText.includes(pattern)) {
-        displayText = displayText.replace(pattern, `${pattern}${suffix}`);
-        replaced = true;
-        break;
-      }
-    }
-
-    // If still not found, try case-insensitive match for the last name at least
-    if (!replaced && lastName) {
-      const idx = displayText.toLowerCase().indexOf(lastName.toLowerCase());
-      if (idx !== -1) {
-        const original = displayText.substring(idx, idx + lastName.length);
-        displayText = displayText.replace(original, `${original}${suffix}`);
-      }
-    }
-  }
+  // The parent annotates every player name in the text with #JERSEY (TEAM)
+  // using the box-score lookup. Fall back to the raw text if no annotation
+  // was produced (e.g. box score not loaded yet).
+  const displayText = annotatedText ?? play.text ?? "";
 
   return (
     <motion.div
@@ -401,7 +334,7 @@ function PlayCard({
           type="button"
           onClick={onAvatarClick}
           disabled={!onAvatarClick}
-          aria-label={onAvatarClick ? `Open today's stats for ${athlete?.displayName ?? "player"}` : undefined}
+          aria-label={onAvatarClick ? `Open today's stats for ${avatarDisplayName ?? "player"}` : undefined}
           className={`relative w-10 h-10 rounded-full p-0 border-0 bg-transparent ${
             onAvatarClick
               ? "cursor-pointer transition-transform hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
@@ -417,7 +350,7 @@ function PlayCard({
             {avatarState === "headshot" && headshotSrc ? (
               <Image
                 src={headshotSrc}
-                alt={athlete?.displayName ?? "Player"}
+                alt={avatarDisplayName ?? "Player"}
                 width={40}
                 height={40}
                 className="object-cover w-full h-full"
@@ -454,11 +387,11 @@ function PlayCard({
         </button>
 
         {/* Jersey number */}
-        {athlete?.jersey && (
+        {avatarJersey && (
           <span
             className="text-[9px] font-bold tabular-nums leading-none"
             style={{ color: hexWithOpacity(accentColor, isLow ? 0.35 : 0.65) }}>
-            #{athlete.jersey}
+            #{avatarJersey}
           </span>
         )}
       </div>
@@ -550,33 +483,90 @@ export default function PlayByPlayFeed({
   const homeColor = getTeamColor(home.team.abbreviation) || "#a855f7";
   const awayColor = getTeamColor(away.team.abbreviation) || "#3b82f6";
 
-  // Resolve each play to a box-score player (when possible). The resolver
-  // returns headshot URL plus stats/team so the avatar click can pop the same
-  // Today's Stats modal that Box Score uses. Resolution order:
-  //   1. play.athletes[0].id matches a box-score athlete
-  //   2. play.text contains a box-score player's display name
-  //   3. otherwise undefined (PlayCard falls back to logo/emoji, no click)
+  // Resolve each play to a box-score player (when possible). The avatar
+  // should reflect the FIRST player mentioned in the play text (e.g.
+  // "Lauren Betts makes ... (Sonia Citron assists)" → Betts), so we scan
+  // the text first and pick the lowest-index match, breaking ties by
+  // longest name. We only fall back to play.athletes[0] when the text
+  // gives us nothing (rare: timeouts, jump balls, etc.).
   const resolvedByPlayId = useMemo(() => {
     const out: Record<string, ResolvedPlayer> = {};
     if (!playerById && !playerLookup) return out;
     visiblePlays.forEach((play) => {
+      const text = play.text;
+      if (text && playerLookup && playerLookup.length) {
+        let best: { p: ResolvedPlayer; idx: number; len: number } | null = null;
+        for (const p of playerLookup) {
+          const idx = text.indexOf(p.name);
+          if (idx === -1) continue;
+          if (
+            !best
+            || idx < best.idx
+            || (idx === best.idx && p.name.length > best.len)
+          ) {
+            best = { p, idx, len: p.name.length };
+          }
+        }
+        if (best) {
+          out[play.id] = best.p;
+          return;
+        }
+      }
       const athleteId = play.athletes?.[0]?.athlete?.id;
       if (athleteId && playerById?.[athleteId]) {
         out[play.id] = playerById[athleteId];
-        return;
-      }
-      const text = play.text;
-      if (text && playerLookup) {
-        for (const p of playerLookup) {
-          if (text.includes(p.name)) {
-            out[play.id] = p;
-            return;
-          }
-        }
       }
     });
     return out;
   }, [visiblePlays, playerById, playerLookup]);
+
+  // Annotate every box-score player name in each play's text with
+  // " #JERSEY (TEAM)". Iterates the lookup (already sorted longest-first),
+  // tracks replaced ranges so "Aliyah Boston" doesn't also get a stray
+  // "Boston" annotation, and uses indexOf to catch every occurrence —
+  // assister, blocker, fouled-on, etc. — not just the first.
+  const annotatedTextById = useMemo(() => {
+    const out: Record<string, string> = {};
+    visiblePlays.forEach((play) => {
+      const text = play.text ?? "";
+      if (!text || !playerLookup || !playerLookup.length) {
+        out[play.id] = text;
+        return;
+      }
+      type Match = { start: number; end: number; suffix: string };
+      const matches: Match[] = [];
+      for (const p of playerLookup) {
+        const teamAbbr = p.team.abbreviation;
+        if (!teamAbbr) continue;
+        const jersey = p.stats.athlete.jersey;
+        const suffix = jersey
+          ? ` #${jersey} (${teamAbbr})`
+          : ` (${teamAbbr})`;
+        let i = 0;
+        while ((i = text.indexOf(p.name, i)) !== -1) {
+          const start = i;
+          const end = i + p.name.length;
+          const overlap = matches.some((m) => start < m.end && end > m.start);
+          if (!overlap) matches.push({ start, end, suffix });
+          i = end;
+        }
+      }
+      if (!matches.length) {
+        out[play.id] = text;
+        return;
+      }
+      matches.sort((a, b) => a.start - b.start);
+      let assembled = "";
+      let cursor = 0;
+      for (const m of matches) {
+        assembled += text.slice(cursor, m.end) + m.suffix;
+        cursor = m.end;
+      }
+      assembled += text.slice(cursor);
+      out[play.id] = assembled;
+    });
+    return out;
+  }, [visiblePlays, playerLookup]);
 
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [selectedPlayType, setSelectedPlayType] = useState<PlayType | null>(null);
@@ -809,6 +799,7 @@ export default function PlayByPlayFeed({
                 resolvedTeam={resolved?.team}
                 resolvedPlayerName={resolved?.stats.athlete.displayName}
                 resolvedJersey={resolved?.stats.athlete.jersey}
+                annotatedText={annotatedTextById[play.id]}
               />
             );
           })}

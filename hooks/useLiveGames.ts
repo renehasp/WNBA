@@ -6,8 +6,8 @@ export function useLiveGames() {
   return useQuery({
     queryKey: ["scoreboard"],
     queryFn: fetchScoreboard,
-    refetchInterval: 8000,
-    staleTime: 5000,
+    refetchInterval: 3000,
+    staleTime: 2000,
     retry: 2,
   });
 }

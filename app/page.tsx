@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { fetchSchedule } from "@/lib/espn";
 import { mergeGameData, saveGames } from "@/lib/gameStorage";
+import { useLiveGames } from "@/hooks/useLiveGames";
 import GameCard from "@/components/GameCard";
 import Navbar from "@/components/Navbar";
 import { RefreshCw, Calendar, Wifi, WifiOff } from "lucide-react";
@@ -18,16 +19,33 @@ export default function Dashboard() {
   const { data, isLoading, isError, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["schedule"],
     queryFn: () => fetchSchedule(40),
-    refetchInterval: 3000,
-    staleTime: 2000,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
     retry: 2,
   });
 
-  // Merge fetched data with stored historical data
+  // Live scoreboard polls every few seconds (no server cache) so in-progress
+  // game scores/clocks stay current even though the schedule endpoint is
+  // cached for 5 minutes.
+  const { data: liveScoreboard, dataUpdatedAt: liveUpdatedAt } = useLiveGames();
+
+  // Merge fetched data with stored historical data, then overlay any
+  // matching events from the live scoreboard so live games tick in real time.
   const events = useMemo(() => {
     const fetchedEvents = data?.events ?? [];
-    return mergeGameData(fetchedEvents);
-  }, [data]);
+    const merged = mergeGameData(fetchedEvents);
+    const liveById = new Map(
+      (liveScoreboard?.events ?? []).map((e) => [e.id, e]),
+    );
+    if (liveById.size === 0) return merged;
+    const overlaid = merged.map((e) => liveById.get(e.id) ?? e);
+    // Include any live events that weren't in the schedule window at all.
+    const seen = new Set(overlaid.map((e) => e.id));
+    for (const liveEvent of liveById.values()) {
+      if (!seen.has(liveEvent.id)) overlaid.push(liveEvent);
+    }
+    return overlaid;
+  }, [data, liveScoreboard]);
 
   // Save final events to localStorage for persistence
   useEffect(() => {
@@ -41,8 +59,11 @@ export default function Dashboard() {
   const upcomingEvents = events.filter((e) => e.status.type.state === "pre");
   const finalEvents = events.filter((e) => e.status.type.state === "post");
 
-  const lastUpdated = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" })
+  // Show whichever feed updated more recently — live scoreboard ticks
+  // far more often than the (5-minute cached) schedule.
+  const newestUpdate = Math.max(dataUpdatedAt ?? 0, liveUpdatedAt ?? 0);
+  const lastUpdated = newestUpdate
+    ? new Date(newestUpdate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" })
     : null;
 
   return (
@@ -225,7 +246,7 @@ export default function Dashboard() {
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-white/20">
                   <Wifi size={12} />
-                  <span>Polling ESPN every 8 seconds</span>
+                  <span>Polling ESPN every 3 seconds</span>
                 </div>
               </div>
             )}
