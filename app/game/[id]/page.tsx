@@ -214,7 +214,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
               {/* Hide Button */}
               <button
                 onClick={() => setShowMiniScoreboard(false)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
+                className="absolute right-4 bottom-1 p-1 hover:bg-white/10 rounded transition-colors"
                 title="Hide mini scoreboard"
                 aria-label="Hide mini scoreboard">
                 <X size={16} className="text-white/40 hover:text-white/70" />
