@@ -18,8 +18,8 @@ export default function Dashboard() {
   const { data, isLoading, isError, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["schedule"],
     queryFn: () => fetchSchedule(40),
-    refetchInterval: 8000,
-    staleTime: 5000,
+    refetchInterval: 3000,
+    staleTime: 2000,
     retry: 2,
   });
 
