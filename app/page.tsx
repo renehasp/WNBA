@@ -114,12 +114,12 @@ export default function Dashboard() {
         {/* Loaded content */}
         {!isLoading && (
           <div className="flex flex-col gap-10 relative z-10">
-            {/* Live games */}
+            {/* In Progress games with live scores */}
             {liveEvents.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-4">
                   <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-live" />
-                  <h2 className="text-sm font-bold text-[#22c55e] uppercase tracking-widest">Live Now</h2>
+                  <h2 className="text-sm font-bold text-[#22c55e] uppercase tracking-widest">In Progress</h2>
                   <span className="text-xs text-white/25">({liveEvents.length})</span>
                 </div>
                 <motion.div
