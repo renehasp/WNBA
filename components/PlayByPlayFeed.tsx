@@ -298,11 +298,15 @@ function PlayCard({
     teamAbbr = side === "home" ? home.team.abbreviation : away.team.abbreviation;
   }
 
-  // Replace player name with "player (TEAM)" if we have both
+  // Replace player name with "player #JERSEY (TEAM)" if we have both
   if (playerName && teamAbbr) {
     const nameParts = playerName.split(" ");
     const lastName = nameParts[nameParts.length - 1];
     const firstInitial = nameParts[0]?.[0];
+    const jersey = athlete?.jersey || play.athletes?.[0]?.athlete?.jersey;
+
+    // Build replacement suffix: "#8 (IND)" or just "(IND)" if no jersey
+    const suffix = jersey ? ` #${jersey} (${teamAbbr})` : ` (${teamAbbr})`;
 
     // Try different name patterns in order of specificity
     const namePatterns = [
@@ -314,7 +318,7 @@ function PlayCard({
     let replaced = false;
     for (const pattern of namePatterns) {
       if (displayText.includes(pattern)) {
-        displayText = displayText.replace(pattern, `${pattern} (${teamAbbr})`);
+        displayText = displayText.replace(pattern, `${pattern}${suffix}`);
         replaced = true;
         break;
       }
@@ -325,7 +329,7 @@ function PlayCard({
       const idx = displayText.toLowerCase().indexOf(lastName.toLowerCase());
       if (idx !== -1) {
         const original = displayText.substring(idx, idx + lastName.length);
-        displayText = displayText.replace(original, `${original} (${teamAbbr})`);
+        displayText = displayText.replace(original, `${original}${suffix}`);
       }
     }
   }
