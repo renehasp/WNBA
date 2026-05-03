@@ -11,7 +11,7 @@ import { getTeamFoundedYear } from "@/lib/teamData";
 const FAV_YELLOW = "#fde68a";
 
 interface TeamCardProps {
-  team: ESPNTeam & { record?: { items?: Array<{ summary: string }> } };
+  team: ESPNTeam & { record?: { items?: Array<{ summary?: string }> } };
   logoUrl?: string;
   isFavorite: boolean;
   isLcpCandidate: boolean;
