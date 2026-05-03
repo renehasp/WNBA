@@ -90,6 +90,8 @@ The project includes a `docker-compose.yml` for both development and production 
 
 > **Note:** These commands use `docker compose` (the newer built-in syntax). If you have an older Docker version, use `docker-compose` instead, or install it with `apt install docker-compose` on Ubuntu/Debian or via your package manager.
 
+
+
 ### Development with Docker
 
 Run the dev server with hot reload inside a container:
@@ -101,6 +103,13 @@ docker compose up app-dev
 The dev server will start on [http://localhost:3000](http://localhost:3000) and automatically reload when you change files (volumes are mounted for live editing).
 
 ### Production with Docker
+
+Production pull latest with Docker in ubuntu
+```bash
+git pull origin main && docker compose --profile prod up --build app-prod
+From https://github.com/renehasp/WNBA-SyncCourt
+```
+
 
 Build and run the optimized production image:
 
