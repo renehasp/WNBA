@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Shield, Zap, Clock, Radio, RefreshCw, Loader2, Check, AlertTriangle, Users, Settings as SettingsIcon, Calendar } from "lucide-react";
@@ -79,16 +80,15 @@ export default function Navbar() {
         {/* Logo + primary nav */}
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-              style={{ background: "linear-gradient(135deg, #a855f7, #3b82f6)" }}>
-              🏀
-            </div>
-            <span className="font-bold text-base text-white hidden sm:block tracking-tight">
-              WNBA <span className="text-transparent bg-clip-text"
-                style={{ backgroundImage: "linear-gradient(135deg, #a855f7, #3b82f6)" }}>
-                SyncCourt
-              </span>
-            </span>
+            <Image
+              src="/synccourt-logo.jpg"
+              alt="SyncCourt"
+              width={120}
+              height={40}
+              className="h-8 w-auto"
+              priority
+              unoptimized
+            />
           </Link>
 
           <nav className="flex items-center gap-1">

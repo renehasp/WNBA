@@ -211,6 +211,12 @@ export async function fetchSchedule(days: number = 30): Promise<ESPNScoreboardRe
   return res.json();
 }
 
+export async function fetchSeasonSchedule(days: number = 180): Promise<ESPNScoreboardResponse> {
+  const res = await fetch(`/api/wnba/schedule?days=${days}&futureOnly=true`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Season schedule fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchGameSummary(eventId: string): Promise<ESPNSummaryResponse> {
   const res = await fetch(`/api/wnba/summary/${eventId}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Summary fetch failed: ${res.status}`);

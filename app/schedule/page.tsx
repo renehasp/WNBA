@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Calendar, Heart, Loader2, MapPin, Tv, ChevronRight, Clock } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import { fetchSchedule, getTeamLogoUrl, type ESPNEvent } from "@/lib/espn";
+import { fetchSeasonSchedule, getTeamLogoUrl, type ESPNEvent } from "@/lib/espn";
 import { useAppStore } from "@/store/useAppStore";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
@@ -42,10 +42,10 @@ export default function SchedulePage() {
   const favoriteTeamId = useAppStore((s) => s.favoriteTeamId);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["schedule"],
-    queryFn: () => fetchSchedule(30),
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    queryKey: ["schedule-season"],
+    queryFn: () => fetchSeasonSchedule(180),
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: 30 * 60 * 1000,
   });
 
   // Filter to upcoming + group by date in the selected time zone.
@@ -92,7 +92,7 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8 flex flex-col gap-6">
         <div className="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -137,7 +137,7 @@ export default function SchedulePage() {
             <span className="text-5xl">🏀</span>
             <p className="text-lg font-bold text-white/55">No upcoming games</p>
             <p className="text-xs text-white/30 text-center max-w-sm">
-              Either the season hasn&apos;t opened yet or the next 30 days have no scheduled games.
+              The WNBA season hasn&apos;t started yet. Check back in May for the full schedule.
             </p>
           </div>
         )}
@@ -157,7 +157,7 @@ export default function SchedulePage() {
               </span>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {day.events.map((event) => (
                 <ScheduleCard
                   key={event.id}
@@ -272,19 +272,19 @@ function ScheduleCard({
         />
       )}
 
-      <div className="relative p-4 sm:p-5">
+      <div className="relative p-3">
         {/* Top row: away vs home */}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-2">
           {/* Away (visiting) */}
           <TeamSide team={away.team} color={awayColor} logoUrl={awayLogo} role="Visiting" />
 
           {/* Center: game time */}
-          <div className="flex flex-col items-center gap-1 shrink-0">
-            <div className="text-xs uppercase tracking-widest font-semibold text-white/35">
+          <div className="flex flex-col items-center gap-0.5 shrink-0">
+            <div className="text-[9px] uppercase tracking-widest font-semibold text-white/35">
               vs
             </div>
-            <div className="text-sm font-bold text-white tabular-nums">{time}</div>
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-white/30">
+            <div className="text-xs font-bold text-white tabular-nums">{time}</div>
+            <div className="text-[9px] uppercase tracking-widest font-semibold text-white/30">
               {shortTzLabel(tz)}
             </div>
           </div>
@@ -294,7 +294,7 @@ function ScheduleCard({
         </div>
 
         {/* Footer info: venue, city, broadcast */}
-        <div className="mt-4 pt-3 border-t border-white/[0.05] flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-white/45">
+        <div className="mt-2 pt-2 border-t border-white/[0.05] flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-white/45">
           {venue && (
             <span className="inline-flex items-center gap-1.5">
               <MapPin size={11} className="text-white/35" />
@@ -332,40 +332,40 @@ function TeamSide({
   reverse?: boolean;
 }) {
   return (
-    <div className={`flex items-center gap-3 min-w-0 flex-1 ${reverse ? "flex-row-reverse" : ""}`}>
+    <div className={`flex items-center gap-2 min-w-0 flex-1 ${reverse ? "flex-row-reverse" : ""}`}>
       <div
-        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center shrink-0"
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
         style={{
           background: hexWithOpacity(color, 0.1),
-          border: `2px solid ${hexWithOpacity(color, 0.3)}`,
+          border: `1.5px solid ${hexWithOpacity(color, 0.3)}`,
         }}>
         {logoUrl ? (
           <Image
             src={logoUrl}
             alt={team.displayName}
-            width={44}
-            height={44}
+            width={32}
+            height={32}
             className="object-contain"
-            style={{ width: "75%", height: "75%" }}
+            style={{ width: "70%", height: "70%" }}
             unoptimized
           />
         ) : (
-          <span className="text-sm font-black" style={{ color }}>
+          <span className="text-xs font-black" style={{ color }}>
             {team.abbreviation.slice(0, 2)}
           </span>
         )}
       </div>
       <div className={`flex flex-col min-w-0 ${reverse ? "items-end" : "items-start"}`}>
         <span
-          className="text-[9px] font-bold uppercase tracking-widest"
+          className="text-[8px] font-bold uppercase tracking-widest"
           style={{ color: hexWithOpacity(color, 0.85) }}>
           {role}
         </span>
-        <span className="font-bold text-white text-sm sm:text-base leading-tight truncate max-w-full"
+        <span className="font-bold text-white text-xs leading-tight truncate max-w-full"
           title={team.displayName}>
           {team.shortDisplayName ?? team.displayName}
         </span>
-        <span className="text-[10px] text-white/30 tabular-nums">{team.abbreviation}</span>
+        <span className="text-[9px] text-white/30 tabular-nums">{team.abbreviation}</span>
       </div>
     </div>
   );

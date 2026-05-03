@@ -1,14 +1,15 @@
 "use client";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, ChevronRight, Loader2, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { fetchTeam, fetchTeamLeaders, getAthleteHeadshotById, getHeadshotUrl, getTeamLogoUrl } from "@/lib/espn";
 import { getTeamColor, getTeamSecondary } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
+import { getTeamLinks } from "@/lib/team-links";
 
 export default function TeamPage({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = use(params);
@@ -74,6 +75,23 @@ export default function TeamPage({ params }: { params: Promise<{ teamId: string 
       athletes.slice(c * perCol, (c + 1) * perCol),
     );
   }, [athletes, colCount]);
+
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showMenu]);
+
+  const teamLinks = team ? getTeamLinks(team.abbreviation) : null;
 
   return (
     <div className="relative min-h-screen flex flex-col">
@@ -153,9 +171,68 @@ export default function TeamPage({ params }: { params: Promise<{ teamId: string 
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45">
                   {team.location ?? ""}
                 </p>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white leading-tight">
-                  {team.name ?? team.displayName}
-                </h1>
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenu(!showMenu);
+                    }}
+                    className="text-3xl sm:text-4xl font-extrabold text-white leading-tight hover:opacity-80 transition-opacity cursor-pointer"
+                    title="Click for team links">
+                    {team.name ?? team.displayName}
+                  </button>
+
+                  {/* Team info menu */}
+                  <AnimatePresence>
+                    {showMenu && teamLinks && (
+                      <motion.div
+                        ref={menuRef}
+                        initial={{ opacity: 0, x: 4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 4 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute top-0 right-full mr-3 z-50 rounded-lg border overflow-hidden whitespace-nowrap"
+                        style={{
+                          background: "#0f0f1a",
+                          borderColor: hexWithOpacity(color, 0.3),
+                          boxShadow: `0 4px 12px ${hexWithOpacity(color, 0.2)}`,
+                        }}>
+                        <a
+                          href={teamLinks.wnba}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                          style={{ color }}>
+                          WNBA
+                          <ExternalLink size={10} />
+                        </a>
+                        <div className="h-px" style={{ background: hexWithOpacity(color, 0.2) }} />
+                        <a
+                          href={`https://www.espn.com/wnba/team/_/name/${abbr?.toLowerCase()}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                          style={{ color }}>
+                          ESPN
+                          <ExternalLink size={10} />
+                        </a>
+                        <div className="h-px" style={{ background: hexWithOpacity(color, 0.2) }} />
+                        <a
+                          href={teamLinks.wikipedia}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                          style={{ color }}>
+                          Wikipedia
+                          <ExternalLink size={10} />
+                        </a>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
                 <div className="flex items-center gap-2 mt-2">
                   <span
                     className="text-xs font-bold px-2 py-0.5 rounded"

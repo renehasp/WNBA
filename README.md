@@ -4,6 +4,12 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 
 <img width="1077" height="1751" alt="image" src="https://github.com/user-attachments/assets/de642807-e366-41ca-98ee-964194ea3719" />
 
+## What's New in v1.2
+
+- **Team page popup menu** — on the individual team detail page (`/teams/[id]`), clicking the team name reveals a popup menu with quick links to the official WNBA team page, ESPN team page, and Wikipedia page for that team.
+- **Fixed WNBA team links** — all WNBA team page links now use the correct URL format with team IDs (e.g. `https://www.wnba.com/team/1611661325/indiana-fever`), ensuring they resolve properly instead of returning "page not found."
+- **Improved popup positioning** — the team info popup is intelligently positioned to the left of the team name to prevent clipping on smaller viewports or constrained container widths.
+
 ## What's New in v1.1
 
 - **Box score team totals** — a bold Totals row at the bottom of each team's box score aggregates points, rebounds, assists, steals, blocks, turnovers, fouls, FG/3PT/FT fractions, and minutes.

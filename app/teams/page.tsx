@@ -1,18 +1,13 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ChevronRight, Heart, Loader2, Users, ExternalLink } from "lucide-react";
+import { Loader2, Users } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import PlayerSearch from "@/components/PlayerSearch";
+import TeamCard from "@/components/TeamCard";
 import { fetchTeams, getTeamLogoUrl } from "@/lib/espn";
-import { getTeamColor, getTeamSecondary } from "@/lib/teams";
-import { hexWithOpacity } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
-import { getTeamLinks } from "@/lib/team-links";
-import { useState, useRef, useEffect } from "react";
-import { AnimatePresence } from "framer-motion";
 
 const FAV_YELLOW = "#fde68a";
 
@@ -21,12 +16,34 @@ export default function TeamsPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["teams"],
     queryFn: fetchTeams,
-    staleTime: 60 * 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchInterval: 30 * 60 * 1000, // Auto-refresh every 30 minutes during season
   });
 
-  const teams = (data?.sports?.[0]?.leagues?.[0]?.teams ?? [])
-    .map((t) => t.team)
+  const allTeams = (data?.sports?.[0]?.leagues?.[0]?.teams ?? [])
+    .map((t) => t.team);
+
+  // Calculate rankings based on win-loss record
+  const teamsWithRank = allTeams
+    .map((team) => {
+      const record = team.record?.items?.[0]?.summary ?? "0-0";
+      const [wins, losses] = record.split("-").map(Number);
+      return { team, wins: wins || 0, losses: losses || 0 };
+    })
+    .sort((a, b) => {
+      const aWinPct = a.wins / (a.wins + a.losses);
+      const bWinPct = b.wins / (b.wins + b.losses);
+      return bWinPct - aWinPct;
+    })
+    .map((item, index) => ({ ...item, rank: index + 1 }));
+
+  const teams = teamsWithRank
+    .map((item) => item.team)
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  const teamRankMap = Object.fromEntries(
+    teamsWithRank.map((item) => [item.team.id, item.rank])
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -68,173 +85,20 @@ export default function TeamsPage() {
 
         {!isLoading && teams.length > 0 && (
           <motion.div
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+            className="grid grid-cols-4 gap-4"
             initial="hidden"
             animate="visible"
             variants={{ visible: { transition: { staggerChildren: 0.04 } } }}>
-            {teams.map((team, idx) => {
-              // eslint-disable-next-line react-hooks/rules-of-hooks
-              const [showMenu, setShowMenu] = useState(false);
-              // eslint-disable-next-line react-hooks/rules-of-hooks
-              const menuRef = useRef<HTMLDivElement>(null);
-
-              // eslint-disable-next-line react-hooks/rules-of-hooks
-              useEffect(() => {
-                const handleClickOutside = (e: MouseEvent) => {
-                  if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                    setShowMenu(false);
-                  }
-                };
-                if (showMenu) {
-                  document.addEventListener("mousedown", handleClickOutside);
-                  return () => document.removeEventListener("mousedown", handleClickOutside);
-                }
-              }, [showMenu]);
-
-              const color = getTeamColor(team.abbreviation) || `#${team.color || "a855f7"}`;
-              const secondary = getTeamSecondary(team.abbreviation);
-              const record = team.record?.items?.[0]?.summary;
-              const logoUrl = getTeamLogoUrl(team);
-              // Only the first card gets priority — Next's LCP detector picks
-              // a single image, and marking many as priority creates new warnings.
-              const isLcpCandidate = idx === 0;
-              const isFavorite = team.id === favoriteTeamId;
-              const teamLinks = getTeamLinks(team.abbreviation);
-
-              return (
-                <motion.div
-                  key={team.id}
-                  variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
-                  <Link
-                    href={`/teams/${team.id}`}
-                    className="group relative block rounded-2xl border overflow-hidden transition-all hover:scale-[1.02]"
-                    style={{
-                      background: isFavorite
-                        ? `linear-gradient(135deg, ${hexWithOpacity(FAV_YELLOW, 0.18)} 0%, ${hexWithOpacity(color, 0.12)} 100%)`
-                        : `linear-gradient(135deg, ${hexWithOpacity(color, 0.15)} 0%, ${hexWithOpacity(secondary, 0.08)} 100%)`,
-                      borderColor: isFavorite ? hexWithOpacity(FAV_YELLOW, 0.55) : hexWithOpacity(color, 0.25),
-                      boxShadow: isFavorite ? `0 0 24px ${hexWithOpacity(FAV_YELLOW, 0.15)}` : undefined,
-                    }}>
-                    {isFavorite && (
-                      <div
-                        className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full flex items-center justify-center"
-                        title="Your favorite team"
-                        style={{
-                          background: hexWithOpacity(FAV_YELLOW, 0.18),
-                          border: `1px solid ${hexWithOpacity(FAV_YELLOW, 0.55)}`,
-                        }}>
-                        <Heart size={11} fill={FAV_YELLOW} className="text-yellow-200" />
-                      </div>
-                    )}
-                    {/* Background watermark — CSS background so it isn't LCP-tracked */}
-                    {logoUrl && (
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        aria-hidden
-                        style={{
-                          backgroundImage: `url(${logoUrl})`,
-                          backgroundSize: "120%",
-                          backgroundPosition: "center",
-                          backgroundRepeat: "no-repeat",
-                          opacity: 0.1,
-                          filter: "blur(0.5px)",
-                        }}
-                      />
-                    )}
-                    <div className="relative p-4 flex flex-col gap-3 min-h-[140px]">
-                      <div className="flex items-start justify-between">
-                        {logoUrl ? (
-                          <Image
-                            src={logoUrl}
-                            alt={team.displayName}
-                            width={48}
-                            height={48}
-                            className="object-contain"
-                            style={{ width: 48, height: 48 }}
-                            priority={isLcpCandidate}
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full flex items-center justify-center font-black text-lg"
-                            style={{ background: hexWithOpacity(color, 0.2), color }}>
-                            {team.abbreviation.slice(0, 2)}
-                          </div>
-                        )}
-                        <ChevronRight
-                          size={16}
-                          className="text-white/30 group-hover:text-white/70 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <div className="relative inline-block">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowMenu(!showMenu);
-                            }}
-                            className="text-[10px] font-semibold uppercase tracking-widest text-white/40 hover:text-white/70 transition-colors cursor-pointer underline underline-offset-2">
-                            {team.location ?? ""}
-                          </button>
-
-                          {/* Team info menu */}
-                          <AnimatePresence>
-                            {showMenu && teamLinks && (
-                              <motion.div
-                                ref={menuRef}
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute top-full mt-1 left-0 z-50 rounded-lg border overflow-hidden whitespace-nowrap"
-                                style={{
-                                  background: "#0f0f1a",
-                                  borderColor: hexWithOpacity(color, 0.3),
-                                  boxShadow: `0 4px 12px ${hexWithOpacity(color, 0.2)}`,
-                                }}>
-                                <a
-                                  href={teamLinks.wnba}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                                  style={{ color }}>
-                                  WNBA
-                                  <ExternalLink size={10} />
-                                </a>
-                                <div className="h-px" style={{ background: hexWithOpacity(color, 0.2) }} />
-                                <a
-                                  href={teamLinks.wikipedia}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                                  style={{ color }}>
-                                  Wikipedia
-                                  <ExternalLink size={10} />
-                                </a>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                        <h2 className="text-lg font-bold text-white leading-tight">
-                          {team.name ?? team.shortDisplayName}
-                        </h2>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums"
-                            style={{ background: hexWithOpacity(color, 0.18), color }}>
-                            {team.abbreviation}
-                          </span>
-                          {record && (
-                            <span className="text-xs text-white/50 tabular-nums">{record}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
+            {teams.map((team, idx) => (
+              <TeamCard
+                key={team.id}
+                team={team}
+                logoUrl={getTeamLogoUrl(team)}
+                isFavorite={team.id === favoriteTeamId}
+                isLcpCandidate={idx === 0}
+                rank={teamRankMap[team.id]}
+              />
+            ))}
           </motion.div>
         )}
       </main>

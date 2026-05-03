@@ -11,15 +11,20 @@ function fmt(d: Date): string {
   return `${y}${m}${day}`;
 }
 
-// Returns upcoming WNBA games for the next ~30 days. ESPN's scoreboard
-// supports a date range (YYYYMMDD-YYYYMMDD), so this is a single fetch.
+// Returns WNBA games for a date range. Supports both historical (past N days) and future games.
+// By default fetches past 10 days + today. Pass ?futureOnly=true to fetch future games only.
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  const futureOnly = url.searchParams.get("futureOnly") === "true";
   const daysParam = parseInt(url.searchParams.get("days") ?? "", 10);
-  const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(60, daysParam) : 30;
+  const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(180, daysParam) : 180;
 
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
+  if (!futureOnly) {
+    start.setUTCDate(start.getUTCDate() - 10);
+  }
+
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + days);
 

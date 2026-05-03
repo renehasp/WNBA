@@ -1,3 +1,6 @@
+version: '3.8'
+# v1.2 - Team detail page popup menus, fixed WNBA team links
+
 services:
   # Development server with hot reload
   app-dev:
