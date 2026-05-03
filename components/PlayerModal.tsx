@@ -7,6 +7,7 @@ import type { ESPNPlayerStats, ESPNTeam, ESPNAthleteOverview } from "@/lib/espn"
 import { getTeamColor } from "@/lib/teams";
 import { getAthleteHeadshotById, fetchAthleteOverview } from "@/lib/espn";
 import { hexWithOpacity } from "@/lib/utils";
+import { getFullCollegeName } from "@/lib/colleges";
 
 interface PlayerModalProps {
   stats: ESPNPlayerStats | null;
@@ -281,7 +282,7 @@ export default function PlayerModal({ stats, team, labels = [], onClose }: Playe
                 {detailedAthlete.college?.name && (
                   <div className="p-2.5 rounded-lg col-span-2" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
                     <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold mb-1">College</p>
-                    <p className="text-sm font-bold text-white">{detailedAthlete.college.name}</p>
+                    <p className="text-sm font-bold text-white">{getFullCollegeName(detailedAthlete.college.name)}</p>
                   </div>
                 )}
 
