@@ -1,10 +1,11 @@
 "use client";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, TrendingUp, AlertTriangle } from "lucide-react";
-import type { ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
+import type { ESPNPlayerStats, ESPNTeam, ESPNAthleteOverview } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
-import { getAthleteHeadshotById } from "@/lib/espn";
+import { getAthleteHeadshotById, fetchAthleteOverview } from "@/lib/espn";
 import { hexWithOpacity } from "@/lib/utils";
 
 interface PlayerModalProps {
@@ -106,12 +107,26 @@ function FoulIndicator({ fouls, color }: { fouls: number; color: string }) {
 }
 
 export default function PlayerModal({ stats, team, labels = [], onClose }: PlayerModalProps) {
+  const [athleteOverview, setAthleteOverview] = useState<ESPNAthleteOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (stats?.athlete?.id) {
+      setLoading(true);
+      fetchAthleteOverview(stats.athlete.id)
+        .then(setAthleteOverview)
+        .catch(() => setAthleteOverview(null))
+        .finally(() => setLoading(false));
+    }
+  }, [stats?.athlete?.id]);
+
   if (!stats || !team) return null;
 
   const abbr = team.abbreviation;
   const color = getTeamColor(abbr) || `#${team.color || "a855f7"}`;
   const athlete = stats.athlete;
   const headshotUrl = getAthleteHeadshotById(athlete.id);
+  const detailedAthlete = athleteOverview?.athlete;
 
   const pts = (() => {
     const idx = labels.indexOf("PTS");
@@ -241,6 +256,68 @@ export default function PlayerModal({ stats, team, labels = [], onClose }: Playe
               </div>
             )}
           </div>
+
+          {/* Trading Card - Career Stats */}
+          {detailedAthlete && (
+            <div className="px-5 pb-5 border-t border-white/[0.06]">
+              <p className="text-[11px] text-white/30 uppercase tracking-wide mb-3 font-semibold">Career Info</p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* WNBA Experience */}
+                {detailedAthlete.experience?.years !== undefined && (
+                  <div className="p-2.5 rounded-lg" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold">WNBA Years</p>
+                    <p className="text-lg font-bold" style={{ color }}>
+                      {detailedAthlete.experience.years}
+                    </p>
+                  </div>
+                )}
+
+                {/* Height */}
+                {detailedAthlete.displayHeight && (
+                  <div className="p-2.5 rounded-lg" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold">Height</p>
+                    <p className="text-lg font-bold text-white">{detailedAthlete.displayHeight}</p>
+                  </div>
+                )}
+
+                {/* Weight */}
+                {detailedAthlete.displayWeight && (
+                  <div className="p-2.5 rounded-lg" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold">Weight</p>
+                    <p className="text-lg font-bold text-white">{detailedAthlete.displayWeight}</p>
+                  </div>
+                )}
+
+                {/* Age/DOB */}
+                {detailedAthlete.age && (
+                  <div className="p-2.5 rounded-lg" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold">Age</p>
+                    <p className="text-lg font-bold text-white">{detailedAthlete.age}</p>
+                  </div>
+                )}
+
+                {/* College */}
+                {detailedAthlete.college?.name && (
+                  <div className="p-2.5 rounded-lg col-span-2" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold mb-1">College</p>
+                    <p className="text-sm font-bold text-white">{detailedAthlete.college.name}</p>
+                  </div>
+                )}
+
+                {/* Hometown */}
+                {detailedAthlete.birthPlace && (detailedAthlete.birthPlace.city || detailedAthlete.birthPlace.state) && (
+                  <div className="p-2.5 rounded-lg col-span-2" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold mb-1">Hometown</p>
+                    <p className="text-sm font-bold text-white">
+                      {detailedAthlete.birthPlace.city}
+                      {detailedAthlete.birthPlace.city && detailedAthlete.birthPlace.state && ", "}
+                      {detailedAthlete.birthPlace.state}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>
