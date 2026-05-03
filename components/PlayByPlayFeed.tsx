@@ -311,14 +311,17 @@ function PlayCard({
     const suffix = jersey ? ` #${jersey} (${teamAbbr})` : ` (${teamAbbr})`;
 
     // Try different name patterns in order of specificity
-    const namePatterns = [
+    const namePatterns: string[] = [
       playerName, // Full name: "Raven Johnson"
       lastName, // Last name: "Johnson"
-      ...(firstInitial ? [`${firstInitial}. ${lastName}`, `${firstInitial}.${lastName}`] : []), // Abbreviated: "R. Johnson" or "R.Johnson"
-    ].filter((n): n is string => n && n.length > 0);
+    ];
+    if (firstInitial) {
+      namePatterns.push(`${firstInitial}. ${lastName}`, `${firstInitial}.${lastName}`);
+    }
+    const validPatterns = namePatterns.filter((n): n is string => Boolean(n && n.length > 0));
 
     let replaced = false;
-    for (const pattern of namePatterns) {
+    for (const pattern of validPatterns) {
       if (displayText.includes(pattern)) {
         displayText = displayText.replace(pattern, `${pattern}${suffix}`);
         replaced = true;
