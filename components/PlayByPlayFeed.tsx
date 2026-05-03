@@ -190,6 +190,7 @@ function PlayCard({
   onAvatarClick,
   resolvedTeam,
   resolvedPlayerName,
+  resolvedJersey,
 }: {
   play: ProcessedPlay;
   home: ESPNCompetitor;
@@ -201,6 +202,7 @@ function PlayCard({
   onAvatarClick?: () => void;
   resolvedTeam?: ESPNTeam;
   resolvedPlayerName?: string;
+  resolvedJersey?: string;
 }) {
   const athlete = play.athletes?.[0]?.athlete;
 
@@ -303,21 +305,7 @@ function PlayCard({
     const nameParts = playerName.split(" ");
     const lastName = nameParts[nameParts.length - 1];
     const firstInitial = nameParts[0]?.[0];
-    const athleteJersey = athlete?.jersey;
-    const playAthletesJersey = play.athletes?.[0]?.athlete?.jersey;
-    const jersey = athleteJersey || playAthletesJersey;
-
-    // DEBUG
-    if (play.text?.includes("Cunningham") || play.text?.includes("Boston")) {
-      console.log("Jersey debug:", {
-        playerName,
-        athleteJersey,
-        playAthletesJersey,
-        jersey,
-        athleteObject: athlete,
-        playAthletesObject: play.athletes?.[0]?.athlete,
-      });
-    }
+    const jersey = resolvedJersey || athlete?.jersey || play.athletes?.[0]?.athlete?.jersey;
 
     // Build replacement suffix: "#8 (IND)" or just "(IND)" if no jersey
     const suffix = jersey ? ` #${jersey} (${teamAbbr})` : ` (${teamAbbr})`;
@@ -817,6 +805,7 @@ export default function PlayByPlayFeed({
                 }
                 resolvedTeam={resolved?.team}
                 resolvedPlayerName={resolved?.stats.athlete.displayName}
+                resolvedJersey={resolved?.stats.athlete.jersey}
               />
             );
           })}
