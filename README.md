@@ -88,12 +88,14 @@ Open [http://localhost:3000](http://localhost:3000) — the dev server hot-reloa
 
 The project includes a `docker-compose.yml` for both development and production environments.
 
+> **Note:** These commands use `docker compose` (the newer built-in syntax). If you have an older Docker version, use `docker-compose` instead, or install it with `apt install docker-compose` on Ubuntu/Debian or via your package manager.
+
 ### Development with Docker
 
 Run the dev server with hot reload inside a container:
 
 ```bash
-docker-compose up app-dev
+docker compose up app-dev
 ```
 
 The dev server will start on [http://localhost:3000](http://localhost:3000) and automatically reload when you change files (volumes are mounted for live editing).
@@ -103,7 +105,7 @@ The dev server will start on [http://localhost:3000](http://localhost:3000) and 
 Build and run the optimized production image:
 
 ```bash
-docker-compose --profile prod up app-prod
+docker compose --profile prod up app-prod
 ```
 
 The production server will be available at [http://localhost:1997](http://localhost:1997).
@@ -111,17 +113,28 @@ The production server will be available at [http://localhost:1997](http://localh
 To rebuild the production image after changes:
 
 ```bash
-docker-compose --profile prod up --build app-prod
+docker compose --profile prod up --build app-prod
 ```
 
 ### Stopping Docker containers
 
 ```bash
 # Stop dev server
-docker-compose down
+docker compose down
 
 # Stop production server
-docker-compose --profile prod down
+docker compose --profile prod down
+```
+
+### Using docker-compose (legacy command)
+
+If your system has the older `docker-compose` command instead of `docker compose`, simply replace `docker compose` with `docker-compose` in any of the commands above:
+
+```bash
+# Examples
+docker-compose up app-dev
+docker-compose --profile prod up app-prod
+docker-compose down
 ```
 
 ## Run on your phone (LAN access)
