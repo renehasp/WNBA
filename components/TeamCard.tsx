@@ -12,7 +12,7 @@ const FAV_YELLOW = "#fde68a";
 
 interface TeamCardProps {
   team: ESPNTeam & { record?: { items?: Array<{ summary?: string }> } };
-  logoUrl?: string;
+  logoUrl?: string | null;
   isFavorite: boolean;
   isLcpCandidate: boolean;
   rank?: number;
