@@ -235,12 +235,25 @@ export default function LiveBoxScore({ boxscore, onPlayerClick, liveAwayScore, l
                 </tr>
               );
             })}
+            {/* Stat Labels Row */}
+            <tr style={{ background: "rgba(168,85,247,0.05)", borderTop: "1px solid rgba(168,85,247,0.15)" }}>
+              <td className="px-3 py-1.5 sticky left-0 text-xs text-white/30 uppercase tracking-wider font-semibold"
+                style={{ background: "#0f0f1a" }}>
+                &nbsp;
+              </td>
+              <td className="px-3 py-1.5 text-center text-xs text-white/40 uppercase tracking-wide font-semibold">IMP</td>
+              {displayedStats.map((label) => (
+                <td key={`label-${label}`} className="px-3 py-1.5 text-center text-xs text-white/40 uppercase tracking-wide font-semibold">
+                  {label}
+                </td>
+              ))}
+            </tr>
+
             {/* Team Totals Row */}
             <tr
               onClick={() => setShowComparison(true)}
               style={{
                 background: "linear-gradient(90deg, rgba(168,85,247,0.15), rgba(168,85,247,0.08))",
-                borderTop: "2px solid rgba(168,85,247,0.3)",
                 borderBottom: "2px solid rgba(168,85,247,0.3)",
                 cursor: "pointer",
                 boxShadow: "0 0 12px rgba(168,85,247,0.1)"
