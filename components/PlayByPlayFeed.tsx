@@ -301,6 +301,25 @@ function PlayCard({
         displayText = displayText.replace(original, `${original} (${teamAbbr})`);
       }
     }
+
+    // DEBUG: Log to browser console
+    console.log("PlayCard team abbr debug:", {
+      playText: play.text,
+      playerName,
+      teamAbbr,
+      displayTextAfter: displayText,
+      hasTeamInDisplay: displayText.includes(`(${teamAbbr})`),
+    });
+  } else if (play.text?.includes("Johnson") || play.text?.includes("Boston")) {
+    // Log cases where we have a known player but no team abbreviation
+    console.log("PlayCard missing team abbr:", {
+      playText: play.text,
+      playerName,
+      teamAbbr,
+      athleteTeamId: athlete?.team?.id,
+      playTeamId: play.team?.id,
+      side,
+    });
   }
 
   return (
