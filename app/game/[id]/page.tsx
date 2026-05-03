@@ -3,7 +3,7 @@ import { use, useState, useMemo, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, BarChart2, List, Target, Loader2 } from "lucide-react";
+import { ArrowLeft, BarChart2, List, Target, Loader2, X } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ScoreboardHero from "@/components/ScoreboardHero";
 import PlayByPlayFeed from "@/components/PlayByPlayFeed";
@@ -30,6 +30,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const [activeTab, setActiveTab] = useState<Tab>("plays");
   const [selectedPlayer, setSelectedPlayer] = useState<{ stats: ESPNPlayerStats; team: ESPNTeam } | null>(null);
   const [isHeroVisible, setIsHeroVisible] = useState(true);
+  const [showMiniScoreboard, setShowMiniScoreboard] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
 
   const delaySeconds = useAppStore((s) => s.delaySeconds);
@@ -201,7 +202,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         </div>
 
         {/* Sticky Mini Scoreboard - appears when hero scrolls out of view */}
-        {!isHeroVisible && home && away && liveStatus && (
+        {!isHeroVisible && showMiniScoreboard && home && away && liveStatus && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -209,7 +210,16 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
             transition={{ duration: 0.2 }}
             className="fixed top-16 left-0 right-0 z-40"
             style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(0,0,0,0.85))" }}>
-            <div className="px-4 py-3 max-w-7xl mx-auto w-full">
+            <div className="relative px-4 py-3 max-w-7xl mx-auto w-full">
+              {/* Hide Button */}
+              <button
+                onClick={() => setShowMiniScoreboard(false)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
+                title="Hide mini scoreboard"
+                aria-label="Hide mini scoreboard">
+                <X size={16} className="text-white/40 hover:text-white/70" />
+              </button>
+
               <div className="flex items-center justify-between gap-4">
                 {/* Away Team */}
                 <div className="flex items-center gap-2 flex-1 min-w-0">
