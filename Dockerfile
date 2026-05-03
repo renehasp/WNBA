@@ -1,3 +1,6 @@
+# WNBA SyncCourt v1.2 Docker Build
+# Multi-stage build: builder stage (compile) + production stage (runtime)
+
 # Build stage
 FROM node:24-alpine AS builder
 

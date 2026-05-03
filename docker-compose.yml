@@ -1,4 +1,7 @@
-# v1.2 - Team detail page popup menus, fixed WNBA team links
+# WNBA SyncCourt v1.2
+# Live WNBA game tracker with team detail pages, player rosters, box scores, shot charts, and leaderboards
+# Features: Team detail popup menus, fixed WNBA team links, SyncCourt logo, play-by-play filters,
+# sticky mini scoreboard, full team names, richer player cards, and more
 
 services:
   # Development server with hot reload
