@@ -238,30 +238,11 @@ export default function PlayerModal({ stats, team, labels = [], onClose }: Playe
             </div>
           </div>
 
-          {/* Stats grid */}
-          <div className="px-5 pb-5">
-            <p className="text-[11px] text-white/30 uppercase tracking-wide mb-3 font-semibold">Today&apos;s Stats</p>
-            {stats.didNotPlay ? (
-              <div className="text-center py-4 text-white/30 text-sm">
-                Did Not Play{stats.reason ? ` — ${stats.reason}` : ""}
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {DISPLAY_STATS.map((label) => {
-                  const idx = labels.indexOf(label);
-                  if (idx < 0) return null;
-                  const val = stats.stats[idx] ?? "0";
-                  return <StatBubble key={label} label={label} value={val} color={color} />;
-                })}
-              </div>
-            )}
-          </div>
-
           {/* Trading Card - Career Stats */}
           {detailedAthlete && (
-            <div className="px-5 pb-5 border-t border-white/[0.06]">
+            <div className="px-5 pt-5" style={{ borderTop: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
               <p className="text-[11px] text-white/30 uppercase tracking-wide mb-3 font-semibold">Career Info</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 pb-5">
                 {/* WNBA Experience */}
                 {detailedAthlete.experience?.years !== undefined && (
                   <div className="p-2.5 rounded-lg" style={{ background: hexWithOpacity(color, 0.08), border: `1px solid ${hexWithOpacity(color, 0.2)}` }}>
@@ -318,6 +299,25 @@ export default function PlayerModal({ stats, team, labels = [], onClose }: Playe
               </div>
             </div>
           )}
+
+          {/* Stats grid */}
+          <div className="px-5 pb-5">
+            <p className="text-[11px] text-white/30 uppercase tracking-wide mb-3 font-semibold">Today&apos;s Stats</p>
+            {stats.didNotPlay ? (
+              <div className="text-center py-4 text-white/30 text-sm">
+                Did Not Play{stats.reason ? ` — ${stats.reason}` : ""}
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {DISPLAY_STATS.map((label) => {
+                  const idx = labels.indexOf(label);
+                  if (idx < 0) return null;
+                  const val = stats.stats[idx] ?? "0";
+                  return <StatBubble key={label} label={label} value={val} color={color} />;
+                })}
+              </div>
+            )}
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
