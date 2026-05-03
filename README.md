@@ -50,7 +50,8 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 - [Lucide](https://lucide.dev/) icons
 - ESPN's public WNBA endpoints (no key required)
 
-<img width="1062" height="1731" alt="image" src="https://github.com/user-attachments/assets/e110b0f8-df6b-4ec9-b8a1-b77d55d05d4e" />
+<img width="1465" height="847" alt="image" src="https://github.com/user-attachments/assets/be87a51a-0fe9-469b-80f5-694563864361" />
+
 
 
 ## Prerequisites
