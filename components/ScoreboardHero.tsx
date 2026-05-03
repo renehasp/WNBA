@@ -8,6 +8,8 @@ import { formatGameClock } from "@/lib/espn";
 import { getTeamColor, getTeamInfo } from "@/lib/teams";
 import { hexWithOpacity, ordinalPeriod } from "@/lib/utils";
 import type { SyncMode } from "@/store/useAppStore";
+import { getTeamLinks } from "@/lib/team-links";
+import { ExternalLink } from "lucide-react";
 
 const WNBA_TIMEOUTS_TOTAL = 7;
 const DELAY_COLOR = "#f59e0b"; // amber when broadcast delay is set
@@ -170,10 +172,27 @@ function TeamBlock({
   // overrides the live one.
   displayedScore?: string;
 }) {
+  const [showTeamMenu, setShowTeamMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowTeamMenu(false);
+      }
+    };
+    if (showTeamMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showTeamMenu]);
+
   const abbr = competitor.team.abbreviation;
   const teamColor = getTeamColor(abbr) || `#${competitor.team.color || "a855f7"}`;
   const score = displayedScore ?? competitor.score ?? "0";
   const isWinning = parseInt(score) > 0;
+  const teamLinks = getTeamLinks(abbr);
+  const cityName = competitor.team.location || getTeamInfo(abbr)?.city || abbr;
 
   return (
     <div
@@ -218,7 +237,53 @@ function TeamBlock({
           title={competitor.team.displayName}>
           {competitor.team.shortDisplayName || competitor.team.displayName}
         </p>
-        <p className="text-xs text-white/30">{getTeamInfo(abbr)?.city || abbr}</p>
+        {/* City name — clickable to show team history */}
+        <div className="relative inline-block">
+          <button
+            onClick={() => setShowTeamMenu(!showTeamMenu)}
+            className="text-xs text-white/30 hover:text-white/60 transition-colors cursor-pointer underline underline-offset-2"
+            title="View team history">
+            {cityName}
+          </button>
+
+          {/* Team info menu */}
+          <AnimatePresence>
+            {showTeamMenu && teamLinks && (
+              <motion.div
+                ref={menuRef}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="absolute top-full mt-2 z-50 rounded-lg border overflow-hidden"
+                style={{
+                  background: "#0f0f1a",
+                  borderColor: hexWithOpacity(teamColor, 0.3),
+                  boxShadow: `0 4px 12px ${hexWithOpacity(teamColor, 0.2)}`,
+                }}>
+                <a
+                  href={teamLinks.wnba}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                  style={{ color: teamColor }}>
+                  WNBA
+                  <ExternalLink size={10} />
+                </a>
+                <div className="h-px" style={{ background: hexWithOpacity(teamColor, 0.2) }} />
+                <a
+                  href={teamLinks.wikipedia}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                  style={{ color: teamColor }}>
+                  Wikipedia
+                  <ExternalLink size={10} />
+                </a>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Score */}

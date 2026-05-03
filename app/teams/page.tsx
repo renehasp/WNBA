@@ -3,13 +3,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ChevronRight, Heart, Loader2, Users } from "lucide-react";
+import { ChevronRight, Heart, Loader2, Users, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import PlayerSearch from "@/components/PlayerSearch";
 import { fetchTeams, getTeamLogoUrl } from "@/lib/espn";
 import { getTeamColor, getTeamSecondary } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
+import { getTeamLinks } from "@/lib/team-links";
+import { useState, useRef, useEffect } from "react";
+import { AnimatePresence } from "framer-motion";
 
 const FAV_YELLOW = "#fde68a";
 
@@ -70,6 +73,24 @@ export default function TeamsPage() {
             animate="visible"
             variants={{ visible: { transition: { staggerChildren: 0.04 } } }}>
             {teams.map((team, idx) => {
+              // eslint-disable-next-line react-hooks/rules-of-hooks
+              const [showMenu, setShowMenu] = useState(false);
+              // eslint-disable-next-line react-hooks/rules-of-hooks
+              const menuRef = useRef<HTMLDivElement>(null);
+
+              // eslint-disable-next-line react-hooks/rules-of-hooks
+              useEffect(() => {
+                const handleClickOutside = (e: MouseEvent) => {
+                  if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                    setShowMenu(false);
+                  }
+                };
+                if (showMenu) {
+                  document.addEventListener("mousedown", handleClickOutside);
+                  return () => document.removeEventListener("mousedown", handleClickOutside);
+                }
+              }, [showMenu]);
+
               const color = getTeamColor(team.abbreviation) || `#${team.color || "a855f7"}`;
               const secondary = getTeamSecondary(team.abbreviation);
               const record = team.record?.items?.[0]?.summary;
@@ -78,6 +99,7 @@ export default function TeamsPage() {
               // a single image, and marking many as priority creates new warnings.
               const isLcpCandidate = idx === 0;
               const isFavorite = team.id === favoriteTeamId;
+              const teamLinks = getTeamLinks(team.abbreviation);
 
               return (
                 <motion.div
@@ -144,9 +166,56 @@ export default function TeamsPage() {
                         />
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
-                          {team.location ?? ""}
-                        </p>
+                        <div className="relative inline-block">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowMenu(!showMenu);
+                            }}
+                            className="text-[10px] font-semibold uppercase tracking-widest text-white/40 hover:text-white/70 transition-colors cursor-pointer underline underline-offset-2">
+                            {team.location ?? ""}
+                          </button>
+
+                          {/* Team info menu */}
+                          <AnimatePresence>
+                            {showMenu && teamLinks && (
+                              <motion.div
+                                ref={menuRef}
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.15 }}
+                                className="absolute top-full mt-1 left-0 z-50 rounded-lg border overflow-hidden whitespace-nowrap"
+                                style={{
+                                  background: "#0f0f1a",
+                                  borderColor: hexWithOpacity(color, 0.3),
+                                  boxShadow: `0 4px 12px ${hexWithOpacity(color, 0.2)}`,
+                                }}>
+                                <a
+                                  href={teamLinks.wnba}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                                  style={{ color }}>
+                                  WNBA
+                                  <ExternalLink size={10} />
+                                </a>
+                                <div className="h-px" style={{ background: hexWithOpacity(color, 0.2) }} />
+                                <a
+                                  href={teamLinks.wikipedia}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                                  style={{ color }}>
+                                  Wikipedia
+                                  <ExternalLink size={10} />
+                                </a>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <h2 className="text-lg font-bold text-white leading-tight">
                           {team.name ?? team.shortDisplayName}
                         </h2>
