@@ -14,6 +14,20 @@ interface PlayerModalProps {
   onClose: () => void;
 }
 
+const STAT_LABELS: Record<string, string> = {
+  "MIN": "Minutes",
+  "PTS": "Points",
+  "REB": "Rebounds",
+  "AST": "Assists",
+  "STL": "Steals",
+  "BLK": "Blocks",
+  "TO": "Turnovers",
+  "FG": "Field Goals",
+  "3PT": "3-Pointers",
+  "FT": "Free Throws",
+  "PF": "Fouls",
+};
+
 function StatBubble({ label, value, color }: { label: string; value: string; color: string }) {
   const numVal = parseFloat(value) || 0;
   const isHigh = (label === "PTS" && numVal >= 20) ||
@@ -21,6 +35,8 @@ function StatBubble({ label, value, color }: { label: string; value: string; col
     (label === "AST" && numVal >= 8) ||
     (label === "STL" && numVal >= 3) ||
     (label === "BLK" && numVal >= 3);
+
+  const displayLabel = STAT_LABELS[label] || label;
 
   return (
     <div className="flex flex-col items-center gap-1 p-3 rounded-xl border"
@@ -32,7 +48,9 @@ function StatBubble({ label, value, color }: { label: string; value: string; col
         style={{ color: isHigh ? color : "rgba(255,255,255,0.8)" }}>
         {value || "0"}
       </span>
-      <span className="text-[10px] text-white/30 uppercase tracking-wide font-semibold">{label}</span>
+      <span className="text-[10px] text-white/30 uppercase tracking-wide font-semibold">
+        {displayLabel}
+      </span>
       {isHigh && <TrendingUp size={10} style={{ color }} />}
     </div>
   );

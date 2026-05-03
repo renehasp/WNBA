@@ -15,6 +15,7 @@ const nextConfig = {
     "192.168.*.*",   // home subnet (any phone/tablet)
     "100.64.1.244",
     "100.64.95.*",   // /24 over Tailscale / CGNAT range
+    "100.70.100.38",
   ],
 };
 

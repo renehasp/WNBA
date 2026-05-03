@@ -1,5 +1,6 @@
 "use client";
-import { use, useState, useMemo } from "react";
+import { use, useState, useMemo, useRef, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, BarChart2, List, Target, Loader2 } from "lucide-react";
@@ -14,7 +15,7 @@ import { useLiveGames } from "@/hooks/useLiveGames";
 import { useGameData } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/useAppStore";
 import type { ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
-import { getHeadshotUrl, getAthleteHeadshotById } from "@/lib/espn";
+import { getHeadshotUrl, getAthleteHeadshotById, getTeamLogoUrl } from "@/lib/espn";
 
 type Tab = "plays" | "boxscore" | "shotchart";
 
@@ -28,9 +29,21 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params);
   const [activeTab, setActiveTab] = useState<Tab>("plays");
   const [selectedPlayer, setSelectedPlayer] = useState<{ stats: ESPNPlayerStats; team: ESPNTeam } | null>(null);
+  const [isHeroVisible, setIsHeroVisible] = useState(true);
+  const heroRef = useRef<HTMLDivElement>(null);
 
   const delaySeconds = useAppStore((s) => s.delaySeconds);
   const syncMode = useAppStore((s) => s.syncMode);
+
+  useEffect(() => {
+    if (!heroRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsHeroVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    observer.observe(heroRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Get live status from scoreboard to know current period/clock
   const { data: scoreboard } = useLiveGames();
@@ -166,23 +179,93 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
         </Link>
 
         {/* Scoreboard Hero */}
-        {home && away && liveStatus ? (
-          <ScoreboardHero
-            home={home}
-            away={away}
-            status={liveStatus}
-            venueName={venueName}
-            broadcasts={broadcasts}
-            homeTimeoutsUsed={homeTimeoutsUsed}
-            awayTimeoutsUsed={awayTimeoutsUsed}
-            syncMode={syncMode}
-            delayedAwayScore={delayedView?.awayScore}
-            delayedHomeScore={delayedView?.homeScore}
-            delayedClock={delayedView?.clock}
-            delayedPeriod={delayedView?.period}
-          />
-        ) : (
-          <div className="h-48 rounded-2xl skeleton" />
+        <div ref={heroRef}>
+          {home && away && liveStatus ? (
+            <ScoreboardHero
+              home={home}
+              away={away}
+              status={liveStatus}
+              venueName={venueName}
+              broadcasts={broadcasts}
+              homeTimeoutsUsed={homeTimeoutsUsed}
+              awayTimeoutsUsed={awayTimeoutsUsed}
+              syncMode={syncMode}
+              delayedAwayScore={delayedView?.awayScore}
+              delayedHomeScore={delayedView?.homeScore}
+              delayedClock={delayedView?.clock}
+              delayedPeriod={delayedView?.period}
+            />
+          ) : (
+            <div className="h-48 rounded-2xl skeleton" />
+          )}
+        </div>
+
+        {/* Sticky Mini Scoreboard - appears when hero scrolls out of view */}
+        {!isHeroVisible && home && away && liveStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-16 left-0 right-0 z-40"
+            style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(0,0,0,0.85))" }}>
+            <div className="px-4 py-3 max-w-7xl mx-auto w-full">
+              <div className="flex items-center justify-between gap-4">
+                {/* Away Team */}
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                    {away.team.logo ? (
+                      <Image
+                        src={away.team.logo}
+                        alt={away.team.abbreviation}
+                        width={20}
+                        height={20}
+                        className="object-contain"
+                        unoptimized
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-white/70">{away.team.abbreviation.slice(0, 2)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-white/50 truncate">{away.team.shortDisplayName || away.team.displayName}</p>
+                    <p className="text-sm font-bold text-white">{delayedView?.awayScore ?? away.score ?? "0"}</p>
+                  </div>
+                </div>
+
+                {/* Center - Clock & Status */}
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <p className="text-xs font-mono font-bold text-white/80">{delayedView?.clock ?? liveStatus.displayClock}</p>
+                  <p className="text-[10px] text-white/40 uppercase">Q{delayedView?.period ?? liveStatus.period}</p>
+                </div>
+
+                {/* Home Team */}
+                <div className="flex items-center justify-end gap-2 flex-1 min-w-0">
+                  <div className="min-w-0">
+                    <p className="text-xs text-white/50 truncate text-right">{home.team.shortDisplayName || home.team.displayName}</p>
+                    <p className="text-sm font-bold text-white">{delayedView?.homeScore ?? home.score ?? "0"}</p>
+                  </div>
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                    {home.team.logo ? (
+                      <Image
+                        src={home.team.logo}
+                        alt={home.team.abbreviation}
+                        width={20}
+                        height={20}
+                        className="object-contain"
+                        unoptimized
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-white/70">{home.team.abbreviation.slice(0, 2)}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          </motion.div>
         )}
 
         {/* Spoiler Veil Controls */}
@@ -213,7 +296,7 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 )}
                 <span className="relative flex items-center gap-1.5">
                   <Icon size={13} />
-                  <span className="hidden sm:inline">{label}</span>
+                  <span className="inline">{label}</span>
                 </span>
               </button>
             );
@@ -262,6 +345,10 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                 <LiveBoxScore
                   boxscore={boxscore}
                   onPlayerClick={(stats, team) => setSelectedPlayer({ stats, team })}
+                  liveAwayScore={away?.score}
+                  liveHomeScore={home?.score}
+                  liveClock={liveStatus?.displayClock}
+                  livePeriod={liveStatus?.period}
                 />
               )}
 

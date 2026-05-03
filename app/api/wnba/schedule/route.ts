@@ -38,6 +38,6 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     console.error("[WNBA schedule]", err);
-    return NextResponse.json({ events: [] }, { status: 500 });
+    return NextResponse.json({ events: [] });
   }
 }

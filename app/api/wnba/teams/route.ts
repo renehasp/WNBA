@@ -18,6 +18,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[WNBA teams]", err);
-    return NextResponse.json({ sports: [] }, { status: 500 });
+    return NextResponse.json({ sports: [] });
   }
 }

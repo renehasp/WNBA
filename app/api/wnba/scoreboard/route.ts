@@ -18,6 +18,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[WNBA scoreboard]", err);
-    return NextResponse.json({ events: [] }, { status: 500 });
+    return NextResponse.json({ events: [] });
   }
 }

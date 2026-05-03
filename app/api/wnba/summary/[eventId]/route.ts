@@ -22,6 +22,6 @@ export async function GET(
     });
   } catch (err) {
     console.error("[WNBA summary]", err);
-    return NextResponse.json({ plays: [], boxscore: null }, { status: 500 });
+    return NextResponse.json({ plays: [], boxscore: null });
   }
 }

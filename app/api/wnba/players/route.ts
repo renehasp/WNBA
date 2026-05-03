@@ -75,6 +75,6 @@ export async function GET() {
     );
   } catch (err) {
     console.error("[WNBA all players]", err);
-    return NextResponse.json({ players: [] }, { status: 500 });
+    return NextResponse.json({ players: [] });
   }
 }

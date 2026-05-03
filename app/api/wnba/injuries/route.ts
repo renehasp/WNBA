@@ -19,6 +19,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("[WNBA injuries]", err);
-    return NextResponse.json({ injuries: [] }, { status: 500 });
+    return NextResponse.json({ injuries: [] });
   }
 }

@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence, type TargetAndTransition, type Transition } from "framer-motion";
-import { Shield } from "lucide-react";
+import { Shield, X } from "lucide-react";
 import type { ProcessedPlay } from "@/lib/spoiler-engine";
 import type { ESPNCompetitor, ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
@@ -184,9 +184,11 @@ function PlayCard({
 
   // Determine which team this athlete is on (for logo fallback)
   const athleteTeamId = athlete?.team?.id;
+  const playTeamId = play.team?.id;
+  const teamIdForSide = athleteTeamId || playTeamId;
   const side: "home" | "away" | null =
-    athleteTeamId === home.team.id ? "home"
-    : athleteTeamId === away.team.id ? "away"
+    teamIdForSide === home.team.id ? "home"
+    : teamIdForSide === away.team.id ? "away"
     : null;
   const teamLogo = side === "home" ? home.team.logo : side === "away" ? away.team.logo : null;
 
@@ -233,6 +235,74 @@ function PlayCard({
   const clock = play.clock?.displayValue ?? "";
   const hasScore = play.homeScore !== undefined && play.awayScore !== undefined && play.scoringPlay;
 
+  // Add team name after player name in play text
+  let displayText = play.text ?? "";
+  let playerName = athlete?.displayName;
+
+  // Get team abbreviation with multiple fallbacks
+  let teamAbbr: string | null = null;
+
+  // First try: use play.team abbreviation directly (most reliable)
+  if (play.team?.abbreviation) {
+    teamAbbr = play.team.abbreviation;
+  }
+  // Second try: match play.team.id to home/away
+  else if (play.team?.id) {
+    teamAbbr = play.team.id === home.team.id
+      ? home.team.abbreviation
+      : play.team.id === away.team.id
+        ? away.team.abbreviation
+        : null;
+  }
+  // Third try: use athlete team data
+  else if (athlete?.team?.abbreviation) {
+    teamAbbr = athlete.team.abbreviation;
+  }
+  // Fourth try: match athlete.team.id to home/away
+  else if (athlete?.team?.id) {
+    teamAbbr = athlete.team.id === home.team.id
+      ? home.team.abbreviation
+      : athlete.team.id === away.team.id
+        ? away.team.abbreviation
+        : null;
+  }
+  // Last resort: use side variable to infer team
+  else if (side) {
+    teamAbbr = side === "home" ? home.team.abbreviation : away.team.abbreviation;
+  }
+
+  // Replace player name with "player (TEAM)" if we have both
+  if (playerName && teamAbbr) {
+    const nameParts = playerName.split(" ");
+    const lastName = nameParts[nameParts.length - 1];
+    const firstInitial = nameParts[0]?.[0];
+
+    // Try different name patterns in order of specificity
+    const namePatterns = [
+      playerName, // Full name: "Raven Johnson"
+      lastName, // Last name: "Johnson"
+      ...(firstInitial ? [`${firstInitial}. ${lastName}`, `${firstInitial}.${lastName}`] : []), // Abbreviated: "R. Johnson" or "R.Johnson"
+    ].filter((n): n is string => n && n.length > 0);
+
+    let replaced = false;
+    for (const pattern of namePatterns) {
+      if (displayText.includes(pattern)) {
+        displayText = displayText.replace(pattern, `${pattern} (${teamAbbr})`);
+        replaced = true;
+        break;
+      }
+    }
+
+    // If still not found, try case-insensitive match for the last name at least
+    if (!replaced && lastName) {
+      const idx = displayText.toLowerCase().indexOf(lastName.toLowerCase());
+      if (idx !== -1) {
+        const original = displayText.substring(idx, idx + lastName.length);
+        displayText = displayText.replace(original, `${original} (${teamAbbr})`);
+      }
+    }
+  }
+
   return (
     <motion.div
       layout
@@ -242,6 +312,20 @@ function PlayCard({
       transition={anim.transition}
       className="relative flex gap-3 p-3 rounded-xl border overflow-hidden"
       style={{ background: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}>
+
+      {/* Team Logo Background */}
+      {teamLogo && (
+        <div
+          className="absolute inset-0 pointer-events-none opacity-5"
+          style={{
+            backgroundImage: `url(${teamLogo})`,
+            backgroundSize: "120%",
+            backgroundPosition: "right center",
+            backgroundRepeat: "no-repeat",
+            filter: "blur(1px)",
+          }}
+        />
+      )}
 
       {/* Shimmer sweep (3PT + dunk only) */}
       {cfg.shimmer && (
@@ -350,7 +434,7 @@ function PlayCard({
           <p className="text-xs leading-snug"
             style={{ color: isHigh ? "rgba(255,255,255,0.9)" : isLow ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)" }}>
             <span style={{ fontWeight: isHigh ? 600 : isMedium ? 500 : 400 }}>
-              {play.text}
+              {displayText}
             </span>
           </p>
 
@@ -458,10 +542,98 @@ export default function PlayByPlayFeed({
     return out;
   }, [visiblePlays, playerById, playerLookup]);
 
-  const reversed = [...visiblePlays].reverse();
+  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
+  const [selectedPlayType, setSelectedPlayType] = useState<PlayType | null>(null);
+
+  // Extract unique players and play types from visiblePlays
+  const { uniquePlayers, uniquePlayTypes, playersByTeam } = useMemo(() => {
+    const players = new Map<string, { name: string; team: string; teamId: string }>();
+    const playTypes = new Set<PlayType>();
+
+    // First, use playerLookup if available (has complete team info)
+    if (playerLookup && playerLookup.length > 0) {
+      playerLookup.forEach((player) => {
+        const teamName = player.team.shortDisplayName || player.team.displayName;
+        const teamId = player.team.id;
+        players.set(player.name, { name: player.name, team: teamName, teamId });
+      });
+    }
+
+    // Then, also extract from plays for any players not in lookup
+    visiblePlays.forEach((play) => {
+      const playerName = play.athletes?.[0]?.athlete?.displayName ?? "Unknown";
+      if (playerName && playerName !== "Unknown" && !players.has(playerName)) {
+        const athleteTeamId = play.athletes?.[0]?.athlete?.team?.id;
+        let teamName = "";
+        let teamId = "";
+        if (athleteTeamId === home.team.id) {
+          teamName = home.team.shortDisplayName || home.team.displayName;
+          teamId = home.team.id;
+        } else if (athleteTeamId === away.team.id) {
+          teamName = away.team.shortDisplayName || away.team.displayName;
+          teamId = away.team.id;
+        }
+
+        if (teamName) {
+          players.set(playerName, { name: playerName, team: teamName, teamId });
+        }
+      }
+
+      playTypes.add(classifyPlay(play.text, play.scoringPlay));
+    });
+
+    // Group players by team and sort by last name
+    const grouped = new Map<string, Array<{ name: string; team: string; teamId: string }>>();
+    Array.from(players.values()).forEach((player) => {
+      if (!grouped.has(player.team)) {
+        grouped.set(player.team, []);
+      }
+      grouped.get(player.team)!.push(player);
+    });
+
+    // Sort players within each team by last name
+    grouped.forEach((players) => {
+      players.sort((a, b) => {
+        const lastNameA = a.name.split(" ").pop() || a.name;
+        const lastNameB = b.name.split(" ").pop() || b.name;
+        return lastNameA.localeCompare(lastNameB);
+      });
+    });
+
+    return {
+      uniquePlayers: Array.from(players.values()),
+      uniquePlayTypes: Array.from(playTypes).sort(),
+      playersByTeam: grouped,
+    };
+  }, [visiblePlays, playerLookup, home, away]);
+
+  // Filter plays based on selected player and play type
+  const filtered = useMemo(() => {
+    return visiblePlays.filter((play) => {
+      // Filter by player
+      if (selectedPlayer) {
+        const playerName = play.athletes?.[0]?.athlete?.displayName ?? "";
+        if (!playerName.includes(selectedPlayer) && !play.text?.includes(selectedPlayer)) {
+          return false;
+        }
+      }
+
+      // Filter by play type
+      if (selectedPlayType) {
+        const playType = classifyPlay(play.text, play.scoringPlay);
+        if (playType !== selectedPlayType) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [visiblePlays, selectedPlayer, selectedPlayType]);
+
+  const reversed = [...filtered].reverse();
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {/* Spoiler Veil buffer banner */}
       {bufferedCount > 0 && (
         <motion.div
@@ -476,9 +648,109 @@ export default function PlayByPlayFeed({
         </motion.div>
       )}
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Player Filter */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-white/50 uppercase tracking-wide">Player</label>
+          <select
+            value={selectedPlayer ?? ""}
+            onChange={(e) => setSelectedPlayer(e.target.value || null)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30">
+            <option value="">All Players</option>
+            {Array.from(playersByTeam.entries()).map(([team, players]) => (
+              <optgroup key={team} label={team}>
+                {players.map((player) => (
+                  <option key={player.name} value={player.name}>
+                    {player.name} ({team})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {selectedPlayer && (
+            <button
+              onClick={() => setSelectedPlayer(null)}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
+              title="Clear filter">
+              <X size={14} className="text-white/40" />
+            </button>
+          )}
+        </div>
+
+        {/* Play Type Filter */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-white/50 uppercase tracking-wide">Play Type</label>
+          <select
+            value={selectedPlayType ?? ""}
+            onChange={(e) => setSelectedPlayType((e.target.value as PlayType) || null)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30">
+            <option value="">All Play Types</option>
+            {uniquePlayTypes.map((type) => (
+              <option key={type} value={type}>
+                {CONFIGS[type].label || type}
+              </option>
+            ))}
+          </select>
+          {selectedPlayType && (
+            <button
+              onClick={() => setSelectedPlayType(null)}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
+              title="Clear filter">
+              <X size={14} className="text-white/40" />
+            </button>
+          )}
+        </div>
+
+        {/* Results count */}
+        {(selectedPlayer || selectedPlayType) && (
+          <div className="ml-auto flex items-center text-xs text-white/40">
+            {reversed.length} play{reversed.length !== 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
       {/* Feed */}
-      <div className="flex flex-col gap-1.5 pb-6">
-        <AnimatePresence initial={false}>
+      <div className="relative flex flex-col gap-1.5 pb-6">
+        {/* Team Logo Watermarks Background */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
+          {/* Away team logo (left) */}
+          {away.team.logo && (
+            <div
+              className="absolute left-0 top-1/2 -translate-y-1/2"
+              style={{
+                backgroundImage: `url(${away.team.logo})`,
+                backgroundSize: "200%",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                width: "300px",
+                height: "300px",
+                filter: "blur(1px)",
+                opacity: 0.12,
+              }}
+            />
+          )}
+          {/* Home team logo (right) */}
+          {home.team.logo && (
+            <div
+              className="absolute right-0 top-1/2 -translate-y-1/2"
+              style={{
+                backgroundImage: `url(${home.team.logo})`,
+                backgroundSize: "200%",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                width: "300px",
+                height: "300px",
+                filter: "blur(1px)",
+                opacity: 0.12,
+              }}
+            />
+          )}
+        </div>
+
+        {/* Feed content */}
+        <div className="relative z-10">
+          <AnimatePresence initial={false}>
           {reversed.map((play, i) => {
             const resolved = resolvedByPlayId[play.id];
             return (
@@ -500,6 +772,7 @@ export default function PlayByPlayFeed({
             );
           })}
         </AnimatePresence>
+        </div>
       </div>
 
       {visiblePlays.length === 0 && (

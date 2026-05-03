@@ -35,6 +35,6 @@ export async function GET(
     );
   } catch (err) {
     console.error("[WNBA team]", err);
-    return NextResponse.json({ team: null, athletes: [] }, { status: 500 });
+    return NextResponse.json({ team: null, athletes: [] });
   }
 }
