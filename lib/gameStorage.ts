@@ -15,6 +15,8 @@ function getDayAgo(days: number): number {
 }
 
 export function saveGames(events: ESPNEvent[]): void {
+  if (typeof window === "undefined") return;
+
   try {
     const stored = getStoredGames();
     const eventIds = new Set(events.map((e) => e.id));
@@ -42,6 +44,8 @@ export function saveGames(events: ESPNEvent[]): void {
 }
 
 export function getStoredGames(): StoredGame[] {
+  if (typeof window === "undefined") return [];
+
   try {
     const stored = localStorage.getItem(GAMES_STORAGE_KEY);
     if (!stored) return [];
