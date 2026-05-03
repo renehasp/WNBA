@@ -143,6 +143,7 @@ export default function LiveBoxScore({ boxscore, onPlayerClick, liveAwayScore, l
                   key={label}
                   onClick={() => handleSort(label)}
                   className="px-3 py-2.5 text-center cursor-pointer select-none transition-colors"
+                  title={STAT_LABELS[label] || label}
                   style={{ color: sortKey === label ? "#a855f7" : "rgba(255,255,255,0.3)", fontWeight: 600 }}>
                   {label}
                   {sortKey === label && <span className="ml-0.5">{sortAsc ? "↑" : "↓"}</span>}
@@ -241,9 +242,13 @@ export default function LiveBoxScore({ boxscore, onPlayerClick, liveAwayScore, l
                 style={{ background: "#0f0f1a" }}>
                 &nbsp;
               </td>
-              <td className="px-3 py-1.5 text-center text-xs text-white/40 uppercase tracking-wide font-semibold">IMP</td>
+              <td className="px-3 py-1.5 text-center text-xs text-white/40 uppercase tracking-wide font-semibold cursor-help"
+                title="Impact: PTS + REB + AST + STL + BLK − TO">
+                IMP
+              </td>
               {displayedStats.map((label) => (
-                <td key={`label-${label}`} className="px-3 py-1.5 text-center text-xs text-white/40 uppercase tracking-wide font-semibold">
+                <td key={`label-${label}`} className="px-3 py-1.5 text-center text-xs text-white/40 uppercase tracking-wide font-semibold cursor-help"
+                  title={STAT_LABELS[label] || label}>
                   {label}
                 </td>
               ))}
