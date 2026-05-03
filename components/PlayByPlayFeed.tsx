@@ -170,6 +170,8 @@ function PlayCard({
   isNewest,
   headshotSrc,
   onAvatarClick,
+  resolvedTeam,
+  resolvedPlayerName,
 }: {
   play: ProcessedPlay;
   home: ESPNCompetitor;
@@ -179,6 +181,8 @@ function PlayCard({
   isNewest: boolean;
   headshotSrc: string | null;
   onAvatarClick?: () => void;
+  resolvedTeam?: ESPNTeam;
+  resolvedPlayerName?: string;
 }) {
   const athlete = play.athletes?.[0]?.athlete;
 
@@ -237,16 +241,21 @@ function PlayCard({
 
   // Add team name after player name in play text
   let displayText = play.text ?? "";
-  let playerName = athlete?.displayName;
+  // Try to get player name from resolved data (most reliable), then athlete data
+  let playerName = resolvedPlayerName || athlete?.displayName;
 
   // Get team abbreviation with multiple fallbacks
   let teamAbbr: string | null = null;
 
-  // First try: use play.team abbreviation directly (most reliable)
-  if (play.team?.abbreviation) {
+  // First try: use resolved team from box score (most reliable when available)
+  if (resolvedTeam?.abbreviation) {
+    teamAbbr = resolvedTeam.abbreviation;
+  }
+  // Second try: use play.team abbreviation directly
+  else if (play.team?.abbreviation) {
     teamAbbr = play.team.abbreviation;
   }
-  // Second try: match play.team.id to home/away
+  // Third try: match play.team.id to home/away
   else if (play.team?.id) {
     teamAbbr = play.team.id === home.team.id
       ? home.team.abbreviation
@@ -254,11 +263,11 @@ function PlayCard({
         ? away.team.abbreviation
         : null;
   }
-  // Third try: use athlete team data
+  // Fourth try: use athlete team data
   else if (athlete?.team?.abbreviation) {
     teamAbbr = athlete.team.abbreviation;
   }
-  // Fourth try: match athlete.team.id to home/away
+  // Fifth try: match athlete.team.id to home/away
   else if (athlete?.team?.id) {
     teamAbbr = athlete.team.id === home.team.id
       ? home.team.abbreviation
@@ -301,25 +310,6 @@ function PlayCard({
         displayText = displayText.replace(original, `${original} (${teamAbbr})`);
       }
     }
-
-    // DEBUG: Log to browser console
-    console.log("PlayCard team abbr debug:", {
-      playText: play.text,
-      playerName,
-      teamAbbr,
-      displayTextAfter: displayText,
-      hasTeamInDisplay: displayText.includes(`(${teamAbbr})`),
-    });
-  } else if (play.text?.includes("Johnson") || play.text?.includes("Boston")) {
-    // Log cases where we have a known player but no team abbreviation
-    console.log("PlayCard missing team abbr:", {
-      playText: play.text,
-      playerName,
-      teamAbbr,
-      athleteTeamId: athlete?.team?.id,
-      playTeamId: play.team?.id,
-      side,
-    });
   }
 
   return (
@@ -787,6 +777,8 @@ export default function PlayByPlayFeed({
                     ? () => onPlayerClick(resolved.stats, resolved.team)
                     : undefined
                 }
+                resolvedTeam={resolved?.team}
+                resolvedPlayerName={resolved?.stats.athlete.displayName}
               />
             );
           })}
