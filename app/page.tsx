@@ -114,28 +114,6 @@ export default function Dashboard() {
         {/* Loaded content */}
         {!isLoading && (
           <div className="flex flex-col gap-10 relative z-10">
-            {/* In Progress games with live scores */}
-            {liveEvents.length > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-live" />
-                  <h2 className="text-sm font-bold text-[#22c55e] uppercase tracking-widest">In Progress</h2>
-                  <span className="text-xs text-white/25">({liveEvents.length})</span>
-                </div>
-                <motion.div
-                  className="grid grid-cols-2 gap-4"
-                  initial="hidden"
-                  animate="visible"
-                  variants={{ visible: { transition: { staggerChildren: 0.06 } } }}>
-                  <AnimatePresence>
-                    {liveEvents.map((event) => (
-                      <GameCard key={event.id} event={event} />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              </section>
-            )}
-
             {/* Upcoming */}
             {upcomingEvents.length > 0 && (
               <section>
@@ -173,6 +151,28 @@ export default function Dashboard() {
                     });
                   })()}
                 </div>
+              </section>
+            )}
+
+            {/* In Progress games with live scores */}
+            {liveEvents.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-2 h-2 rounded-full bg-[#22c55e] pulse-live" />
+                  <h2 className="text-sm font-bold text-[#22c55e] uppercase tracking-widest">In Progress</h2>
+                  <span className="text-xs text-white/25">({liveEvents.length})</span>
+                </div>
+                <motion.div
+                  className="grid grid-cols-2 gap-4"
+                  initial="hidden"
+                  animate="visible"
+                  variants={{ visible: { transition: { staggerChildren: 0.06 } } }}>
+                  <AnimatePresence>
+                    {liveEvents.map((event) => (
+                      <GameCard key={event.id} event={event} />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
               </section>
             )}
 
