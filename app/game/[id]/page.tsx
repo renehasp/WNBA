@@ -14,12 +14,13 @@ import PlayerModal from "@/components/PlayerModal";
 import { useLiveGames } from "@/hooks/useLiveGames";
 import { useGameData } from "@/hooks/useGameData";
 import { useAppStore } from "@/store/useAppStore";
+import { useQuery } from "@tanstack/react-query";
 import type { ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
-import { getHeadshotUrl, getAthleteHeadshotById, getTeamLogoUrl } from "@/lib/espn";
+import { getHeadshotUrl, getAthleteHeadshotById, getTeamLogoUrl, fetchTeam } from "@/lib/espn";
 
 type Tab = "plays" | "boxscore" | "shotchart";
 
-const TABS: { id: Tab; label: string; Icon: React.ElementType }[] = [
+const TABS: { id: Tab; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
   { id: "plays", label: "Play-by-Play", Icon: List },
   { id: "boxscore", label: "Box Score", Icon: BarChart2 },
   { id: "shotchart", label: "Shot Chart", Icon: Target },
@@ -56,6 +57,22 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
   const competition = liveEvent?.competitions?.[0];
   const home = competition?.competitors?.find((c) => c.homeAway === "home");
   const away = competition?.competitors?.find((c) => c.homeAway === "away");
+
+  // Fetch home + away team rosters so we can size the 3D shooter figure
+  // to each player's real height. Cached aggressively (rosters change once
+  // a season). enabled-gated so we don't fire until we know the team IDs.
+  const homeRosterQ = useQuery({
+    queryKey: ["team-roster", home?.team.id],
+    queryFn: () => fetchTeam(home!.team.id),
+    enabled: !!home?.team.id,
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+  const awayRosterQ = useQuery({
+    queryKey: ["team-roster", away?.team.id],
+    queryFn: () => fetchTeam(away!.team.id),
+    enabled: !!away?.team.id,
+    staleTime: 1000 * 60 * 60,
+  });
 
   // Fetch detailed summary + process through spoiler engine
   const {
@@ -107,6 +124,43 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
     return out;
   }, [playerById]);
 
+  // id → jersey number, for the 3D shot-chart hover tooltip. Some athletes
+  // are missing a jersey field on ESPN; those just render without a number.
+  const playerJerseysById = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [id, entry] of Object.entries(playerById)) {
+      const j = entry.stats.athlete.jersey;
+      if (j) out[id] = j;
+    }
+    return out;
+  }, [playerById]);
+
+  // id → headshot URL, used by the 3D shooter figure to sample a skin tone
+  // for that specific player from their face pixels. Reuses the same URLs
+  // the rest of the app shows.
+  const playerHeadshotsById = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [id, entry] of Object.entries(playerById)) {
+      if (entry.headshot) out[id] = entry.headshot;
+    }
+    return out;
+  }, [playerById]);
+
+  // id → height in inches, sourced from team rosters. Used by the 3D
+  // shooter figure to scale realistically against a 10 ft rim. Players
+  // missing height fall back to 6'2" (74 in) downstream.
+  const playerHeightsById = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const roster of [homeRosterQ.data, awayRosterQ.data]) {
+      for (const a of roster?.athletes ?? []) {
+        if (a.id && typeof a.height === "number" && a.height > 0) {
+          out[a.id] = a.height;
+        }
+      }
+    }
+    return out;
+  }, [homeRosterQ.data, awayRosterQ.data]);
+
   // Build athlete ID → "home"|"away" map from boxscore (play refs often lack team data)
   const teamMap = useMemo(() => {
     const map: Record<string, "home" | "away"> = {};
@@ -150,6 +204,44 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
       period: last.period?.number ?? livePeriod,
     };
   }, [syncMode, visiblePlays, liveClock, livePeriod]);
+
+  // Stoppage detection: infer WHY the clock is currently stopped from the
+  // most recent play's text, then layer ESPN's status (halftime / final /
+  // end-of-period) on top so structural state always wins over a stale
+  // in-game stoppage. Returns a short caption suitable for the 3D
+  // scoreboard's status line.
+  const gameStateLabel = useMemo<string | undefined>(() => {
+    const status = liveStatus?.type?.shortDetail ?? liveStatus?.type?.detail;
+    // Halftime / Final / End-of-period from ESPN's own status takes
+    // priority — these reflect structural game state, not a stale play.
+    if (status && /halftime|final|end of/i.test(status)) return status;
+    if (visiblePlays.length === 0) return status ?? undefined;
+
+    const latest = visiblePlays.reduce((a, b) =>
+      b.gameTimeSecs > a.gameTimeSecs ? b : a,
+    );
+    const t = (latest.text ?? "").toLowerCase();
+
+    // In-game stoppage classification — order matters (most specific first).
+    if (/official timeout|tv timeout|media timeout/.test(t)) return "TV Timeout";
+    if (/team timeout/.test(t)) return "Team Timeout";
+    if (/reset timeout/.test(t)) return "Reset Timeout";
+    if (/full timeout|short timeout|20[\s-]?second timeout/.test(t)) return "Team Timeout";
+    if (/timeout/.test(t)) return "Timeout";
+    if (/technical foul/.test(t)) return "Technical Foul";
+    if (/flagrant foul/.test(t)) return "Flagrant Foul";
+    if (/shooting foul/.test(t)) return "Shooting Foul";
+    if (/loose ball foul/.test(t)) return "Loose Ball Foul";
+    if (/offensive foul|charging foul/.test(t)) return "Offensive Foul";
+    if (/personal foul|defensive foul/.test(t)) return "Personal Foul";
+    if (/foul/.test(t)) return "Foul";
+    if (/replay|review/.test(t)) return "Replay Review";
+    if (/injury/.test(t)) return "Injury Stoppage";
+    if (/jump ball/.test(t)) return "Jump Ball";
+    if (/out of bounds/.test(t)) return undefined; // common, not really a stoppage worth labeling
+
+    return status ?? undefined;
+  }, [liveStatus, visiblePlays]);
 
   if (!liveEvent && !isLoading) {
     return (
@@ -375,6 +467,19 @@ export default function GamePage({ params }: { params: Promise<{ id: string }> }
                   away={away}
                   teamMap={teamMap}
                   playerNamesById={playerNamesById}
+                  playerJerseysById={playerJerseysById}
+                  playerHeadshotsById={playerHeadshotsById}
+                  playerHeightsById={playerHeightsById}
+                  isGameLive={liveStatus?.type?.state === "in"}
+                  gameState={liveStatus?.type?.state}
+                  homeScore={delayedView?.homeScore ?? home?.score ?? "0"}
+                  awayScore={delayedView?.awayScore ?? away?.score ?? "0"}
+                  liveClock={delayedView?.clock ?? liveClock}
+                  livePeriod={delayedView?.period ?? livePeriod}
+                  gameStateText={gameStateLabel}
+                  homeTimeoutsLeft={Math.max(0, 7 - homeTimeoutsUsed)}
+                  awayTimeoutsLeft={Math.max(0, 7 - awayTimeoutsUsed)}
+                  maxTimeouts={7}
                 />
               )}
             </motion.div>

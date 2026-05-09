@@ -4,6 +4,112 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 
 <img width="1077" height="1751" alt="image" src="https://github.com/user-attachments/assets/de642807-e366-41ca-98ee-964194ea3719" />
 
+## What's New in v3.0
+
+This is a major release focused on the new **3D Shot Chart** experience — a fully 3D arena view of the same live play data the 2D chart already shows. The 2D chart still ships unchanged for users who prefer it.
+
+### 3D Shot Chart toggle
+
+- **2D / 3D switch** added at the top of the Shot Chart filter row. 3D is dynamic-imported so the heavy `three` bundle (~250 KB gzip) only loads when toggled in.
+- **Smart default mode**: the Shot Chart tab opens directly in **3D + LIVE** if the game is live, or **3D + Show History** otherwise. Switching tabs re-evaluates the default each time.
+- The **LIVE** button is greyed out and unclickable when the game is in `pre` or `post` state — prevents being stranded on a single replay shot when no new shots can arrive. If a game ends mid-session while LIVE is on, the toggle auto-flips to Show.
+- **Filter visibility**: in 3D + LIVE, the Team / Result / Period / Player filters and the shot count are hidden — LIVE locks to the most recent shot so per-team filtering would be meaningless. Filters return in 2D and in 3D + Show History.
+- **Time scrubber** is 2D-only — the in-world Jumbotron's clock and period header replace it in 3D.
+
+### Procedural 3D court
+
+- **WNBA half-court geometry** built procedurally at 1 unit = 1 ft: 50×47 ft floor, 16×19 ft lane painted with a blend of both teams' colors, free-throw circle (solid + dashed halves following the official convention), uniform 22.15 ft 3-pt arc, 4 ft restricted area, and a midcourt half-ring.
+- **Realistic backboard stanchion** — wide base anchored *behind* the baseline (out of bounds), square-cross-section pole, horizontal arm reaching forward over the court, and a diagonal brace under the arm.
+- **Glass backboard** rendered with `meshPhysicalMaterial` (transmission + clearcoat). Orange perimeter frame, painted shooter's-square outline aligned with the rim height, dark padded plate on the arm side.
+- **Glowing orange torus rim** with a small dark mounting bracket connecting it to the front of the backboard, and a 12-strand white net hanging below.
+- **SyncCourt floor watermark** — the app logo lays on the wood at low opacity (~18%) near the front-court area as a subtle brand cue.
+
+### Ballistic shot trajectories
+
+- Every shot is rendered as a **quadratic Bezier arc** from a 7 ft release point to the rim. Apex height scales with shot distance, capped so half-court heaves stay on-screen.
+- **Made shots** end with the ball at rest in the rim.
+- **Missed shots** terminate at a rim-contact point and a dashed deflection arc shows the ball bouncing off and landing on the floor. Each shot's miss direction is hashed from its play ID so it's deterministic — the same shot always misses the same way.
+- **Free throws** are now first-class — when ESPN omits a coordinate (which it usually does for FTs), the chart synthesizes a default coord at the FT line so they render in both 2D and 3D.
+
+### Camera + interaction
+
+- **OrbitControls** — drag to orbit, scroll to zoom, right-drag to pan. Polar angle clamped so the camera can't go below the floor.
+- **Default vantage** is on the far side of the court (positive Z) at the panel's max-zoom-out distance, looking back at the scoreboard hanging over the basket. Users open zoomed-out and pan / zoom in from there.
+- **Camera up/down side buttons** on the right edge of the canvas nudge the camera ±3 ft (with the OrbitControls target) like an elevator that preserves the look angle.
+- **Fullscreen toggle** in the top-right uses the browser Fullscreen API. In fullscreen, OrbitControls' max zoom-out extends 50% further so users can take in the whole arena. Listens for `Esc` to keep the icon in sync.
+- **Scene fog removed** — no more fade-to-black when zooming all the way out. Distant geometry stays fully lit at any camera distance.
+- **Hover tooltips (2D)** lead with a jersey-number chip + player name in team color, then the play description below.
+
+### LIVE Cinema mode (Hide History)
+
+- **History** toggle in 3D mode: `Show` (all shots, time-scrubbable) vs `LIVE` (most-recent shot only).
+- The `LIVE` label gets a green pulsing dot + fade pulse while the game is in progress.
+- In LIVE mode, the court keeps **exactly one shot at a time**, displayed for **6 seconds** (animation + ~4 s dwell) before the queue advances. New incoming shots are queued chronologically so a flurry of plays plays out one-by-one with breathing room rather than blurring past.
+- The figure stays in **follow-through pose** until the next shot replaces it. `liveShotId` is sticky, only swapped when the dwell expires AND there's a next shot in queue.
+
+### Procedural player figure
+
+- A stylized humanoid appears at the shot origin and shoots:
+  - **Team-colored uniform**: jersey in primary color, shorts in secondary, white sneakers.
+  - **3D jersey numbers** rendered on chest *and* back, outlined in the team's secondary color.
+  - **Team logo decal** on the chest, loaded as a Three texture.
+  - **Floating billboard label** above the head: `#23  Player Name`.
+  - **Animated shooting motion** rigged on the shoulder: crouch → release → follow-through, synced to the ball flight via a shared progress ref.
+  - **Skin tone sampled per-player** from each player's ESPN headshot pixels — the figure loads the headshot via `crossOrigin="anonymous"`, draws to a 2D canvas, samples a face-region square, filters out non-skin pixels, averages what's left, caches per URL.
+  - **Height-accurate scaling** from the team roster — 5'8" players come out shorter than 6'7" players. Defaults to 6'2" (74 in) when ESPN has no height.
+
+### In-world Jumbotron scoreboard
+
+- A large **3D arena scoreboard** hangs above and behind the rim. **Stationary** (faces +Z toward the court interior) — no longer a Billboard, so there's a fixed "front" and the camera defaults to viewing it head-on.
+- **Pulsing team-color frame** — outer border lerps between black and the shooting team's primary color via `useFrame`, ~0.4 Hz sine wave. Goes grey before any shot lands.
+- **Top half**: away logo + scores · period + live clock with green live dot · home score + home logo. Game-state line ("HALFTIME", "FINAL", "TEAM TIMEOUT", etc.). Timeout-dot rows per team.
+- **Bottom half**: jersey-chip + player name on top, then a result row with **emoji + points text + team logo** (🎯 `3 POINTS`, 🏀 `2 POINTS`, 🔥 `SLAM DUNK`, ✓ `1 POINT` for FT made, ❌ `MISS`), then the **shot type** at the bottom (Slam dunk, Tip-in, Alley-oop, Layup, Pull-up jumper, etc.) with **free-throw context** appended (`Free throw · 1 of 2`).
+- Emojis are rendered via a `CanvasTexture` (drawn into a 2D canvas with the system color-emoji font, then mapped onto a plane) since drei's SDF-font `<Text>` can't render colored emoji glyphs.
+
+### Stoppage / game-state detection
+
+- New `gameStateLabel` derived in the game page from the most recent visible play's text. Classifies the live stoppage into:
+  - TV / Team / Reset / generic Timeout
+  - Technical / Flagrant / Shooting / Loose Ball / Offensive / Personal / generic Foul
+  - Replay Review, Injury Stoppage, Jump Ball
+- Halftime / End-of-period / Final from `liveStatus.type.shortDetail` always wins (structural state beats stale play classification).
+- The label feeds the Jumbotron's status line, so during a stoppage the user sees "TEAM TIMEOUT" or "SHOOTING FOUL" right under the clock.
+
+### Loading screen / WebGL resilience
+
+- **Solid dark loading overlay** with the SyncCourt logo covers the canvas any time WebGL isn't ready, so users never see a white screen while the GPU spins up. Title is `Hang Tight, loading…`; subtext adapts to the situation.
+- **Live mini-scoreboard** pinned to the top of the loading screen — scores / clock / period / timeouts keep updating in real time even while the 3D view is loading.
+- **Game-state-aware messages**: `Live Game has Ended`, `Half Time`, `Waiting for Game to begin` replace the generic loading copy when those states apply.
+- **Auto-retry**: while WebGL hasn't initialized, the Canvas is force-remounted every second by bumping its React `key`. Each remount creates a fresh context-creation attempt; the moment one succeeds, `onCreated` fires, the retry loop stops, and the 3D view fades in. New shot arrival also fast-tracks the next retry.
+- **Context-loss listener** flips canvas-ready to false on `webglcontextlost`, restores it on `webglcontextrestored`.
+
+### Spoiler-veil aware
+
+- All 3D data (shots, scores, clock, period, timeouts, stoppage label, live-cinema queue) flows through the same `visiblePlays` and `delayedView` that drive the rest of the app. Set the broadcast delay in the spoiler controls and the 3D view shows that delayed state — same as the 2D chart and play-by-play feed.
+
+### Game-page wiring
+
+- Two new React Query fetches (`/api/wnba/teams/[id]`) load home and away team rosters with a 1-hour staleTime — derives `playerHeightsById`, `playerJerseysById`, and `playerHeadshotsById` for the 3D figure.
+- Live game state (clock, period, scores, timeouts, status) is passed into the Shot Chart so the 3D scoreboard mirrors the main `ScoreboardHero`.
+
+### Performance + safety
+
+- 3D bundle is **dynamic-imported with `ssr: false`** — 2D-default users never download it.
+- Canvas runs **without shadow-mapping** (was the heaviest GPU cost), with `dpr` capped at 1.5, and `powerPreference: high-performance` for predictable Windows GPU behavior.
+- `TABS.Icon` typing in the game page tightened from `React.ElementType` to `React.ComponentType<{ size?: number }>` — installing R3F augments `JSX.IntrinsicElements` with primitives like `<mesh>` that don't accept a `size` prop, which would otherwise collapse `ElementType`'s prop intersection to `never`.
+
+### Other UI polish in this release
+
+- **`DarkSelect` component** — a Radix-Select-based wrapper that replaces every native `<select>` in the app (Shot Chart player filter, Play-by-Play player + play-type filters, Settings time zone + favorite team). Native dropdowns inherited OS styling and painted white backgrounds; `DarkSelect` keeps the dropdown panel on-theme with a dark frosted background, white-translucent border, purple-tinted selection, and group labels for category headers.
+- **Removed** the per-team FG / 3PT summary chips that previously sat at the top of the Shot Chart — the same data is visible in the box-score tab.
+
+### Dependencies added
+
+- `three` ^0.184.0
+- `@react-three/fiber` ^9.6.1 (React 19 compatible)
+- `@react-three/drei` ^10.7.7
+- `@types/three` ^0.184.1 (dev)
+
 ## What's New in v1.2
 
 - **Team page popup menu** — on the individual team detail page (`/teams/[id]`), clicking the team name reveals a popup menu with quick links to the official WNBA team page, ESPN team page, and Wikipedia page for that team.
@@ -28,6 +134,7 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
   - **Play-by-play feed** with player avatars, team-logo background watermarks, and a "Today's Stats" modal that opens when you tap an avatar.
   - **Live box score** with sortable columns (PTS / REB / AST / STL / BLK / TO / PF / FG / 3PT / FT / MIN) plus an Impact composite. Each player row's photo + name links to the full player page; clicking the stat cells opens the quick-look modal.
   - **Shot chart** — proper half-court SVG with WNBA geometry (16×19 ft lane, 22.15 ft uniform 3-pt arc), filled-dot makes / X-mark misses **color-coded by team**, per-team FG and 3PT summaries at the top, Team / Result / Period / **Player** filters, and a **time scrubber** with Q1/Q2/Q3/Q4/OT/Live tick markers (clickable to jump). Pinning the slider to the right keeps it on the live (veil-respecting) edge.
+  - **3D shot chart (v3.0)** — toggle from `2D` to `3D` to fly into a procedural arena view: ballistic shot arcs, glass backboard, glowing rim, OrbitControls camera. Flip History to `LIVE` and a height-accurate procedural player figure appears at the shot origin in their team's uniform with their jersey number, shoots, and stays in follow-through pose until the next live shot. An in-world Jumbotron above the rim shows the live scoreboard + most-recent shot's result and shot type. See *What's New in v3.0* above for the full feature list.
 - **Spoiler veil** — broadcast delay slider that buffers plays so play-by-play can be replayed alongside a delayed TV feed.
 - **Teams browser** (`/teams`) — every WNBA team as a color-themed card with a search dropdown that finds any player by first or last name. Favorite team's card and favorite team's players in search results are tinted yellow.
 - **Team page** (`/teams/[teamId]`) — team header with record + standing, full roster sorted MVP → bench by season PPG, with 🏆🥈🥉 podium emojis for the top 3 scorers and 🐣 / 🤕 markers for rookies and currently-injured players.
@@ -47,6 +154,7 @@ A live WNBA game tracker and roster browser built with Next.js. Pulls live score
 - [TanStack Query](https://tanstack.com/query) for server state
 - [Framer Motion](https://www.framer.com/motion/) for animations
 - [Zustand](https://github.com/pmndrs/zustand) for spoiler-veil state
+- [Three.js](https://threejs.org/) + [React Three Fiber](https://r3f.docs.pmnd.rs/) + [drei](https://drei.docs.pmnd.rs/) for the 3D shot chart (dynamic-imported)
 - [Lucide](https://lucide.dev/) icons
 - ESPN's public WNBA endpoints (no key required)
 
@@ -228,8 +336,10 @@ app/
 
 components/
 ├─ Navbar, GameCard, ScoreboardHero, LiveBoxScore, PlayByPlayFeed
-├─ ShotChart (half-court + scrubber + player filter), PlayerModal, PlayerSearch
-├─ SpoilerVeilControls, Providers (with FontScaleApplier)
+├─ ShotChart (2D half-court + scrubber + player filter)
+├─ ShotChart3D (R3F scene: court, backboard, ballistic arcs, player figure,
+│              in-world jumbotron — dynamic-imported, ssr:false)
+├─ PlayerModal, PlayerSearch, SpoilerVeilControls, Providers (with FontScaleApplier)
 
 hooks/        useLiveGames, useGameData, useSpoilerDelay
 lib/          espn (types + fetchers), teams (color palette), spoiler-engine, utils

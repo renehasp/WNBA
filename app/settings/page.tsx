@@ -13,6 +13,7 @@ import {
 import { fetchTeams } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity } from "@/lib/utils";
+import { DarkSelect } from "@/components/DarkSelect";
 
 const DEVICE_TZ =
   typeof Intl !== "undefined"
@@ -201,22 +202,16 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <select
+            <DarkSelect
+              ariaLabel="Time zone"
               value={timeZonePref ?? "__device__"}
-              onChange={(e) => {
-                const v = e.target.value;
-                setTimeZone(v === "__device__" ? null : v);
-              }}
-              className="w-full text-sm font-semibold rounded-xl border bg-white/[0.02] text-white/90 px-3 py-2.5 hover:border-white/25 transition-colors cursor-pointer focus:outline-none focus:border-white/35"
-              style={{ borderColor: "rgba(255,255,255,0.12)", colorScheme: "dark" }}
-              aria-label="Time zone">
-              {TIME_ZONES.map((tz) => (
-                <option key={tz.value ?? "device"} value={tz.value ?? "__device__"}>
-                  {tz.label}
-                  {tz.value === null ? ` (${DEVICE_TZ})` : ""} — {tz.sublabel}
-                </option>
-              ))}
-            </select>
+              onValueChange={(v) => setTimeZone(v === "__device__" ? null : v)}
+              triggerClassName="w-full text-sm font-semibold rounded-xl border bg-white/[0.02] text-white/90 px-3 py-2.5 hover:border-white/25 transition-colors cursor-pointer focus:outline-none focus:border-white/35"
+              options={TIME_ZONES.map((tz) => ({
+                value: tz.value ?? "__device__",
+                label: `${tz.label}${tz.value === null ? ` (${DEVICE_TZ})` : ""} — ${tz.sublabel}`,
+              }))}
+            />
           </div>
 
           <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border"
@@ -259,20 +254,20 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <select
-              value={favoriteTeamId ?? ""}
-              onChange={(e) => setFavoriteTeam(e.target.value || null)}
+            <DarkSelect
+              ariaLabel="Favorite team"
+              value={favoriteTeamId ?? "__none__"}
+              onValueChange={(v) => setFavoriteTeam(v === "__none__" ? null : v)}
               disabled={teamsQuery.isLoading || teams.length === 0}
-              className="w-full text-sm font-semibold rounded-xl border bg-white/[0.02] text-white/90 px-3 py-2.5 hover:border-white/25 transition-colors cursor-pointer focus:outline-none focus:border-white/35 disabled:opacity-50"
-              style={{ borderColor: "rgba(255,255,255,0.12)", colorScheme: "dark" }}
-              aria-label="Favorite team">
-              <option value="">{teamsQuery.isLoading ? "Loading teams…" : "None"}</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.displayName}
-                </option>
-              ))}
-            </select>
+              triggerClassName="w-full text-sm font-semibold rounded-xl border bg-white/[0.02] text-white/90 px-3 py-2.5 hover:border-white/25 transition-colors cursor-pointer focus:outline-none focus:border-white/35 disabled:opacity-50"
+              options={[
+                {
+                  value: "__none__",
+                  label: teamsQuery.isLoading ? "Loading teams…" : "None",
+                },
+                ...teams.map((t) => ({ value: t.id, label: t.displayName })),
+              ]}
+            />
           </div>
 
           {favoriteTeam && (

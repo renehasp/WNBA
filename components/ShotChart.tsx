@@ -1,11 +1,29 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import dynamic from "next/dynamic";
 import type { ProcessedPlay } from "@/lib/spoiler-engine";
 import { gameTimeSecsToDisplay } from "@/lib/spoiler-engine";
 import type { ESPNCompetitor } from "@/lib/espn";
-import { getTeamColor } from "@/lib/teams";
+import { getTeamColor, getTeamSecondary } from "@/lib/teams";
+import { getTeamLogoUrl } from "@/lib/espn";
 import { hexWithOpacity, cn } from "@/lib/utils";
+import type { Shot3DInput } from "./ShotChart3D";
+import { DarkSelect, type DarkSelectGroup } from "./DarkSelect";
+
+// Heavy 3D view — only loaded when the user toggles to 3D, so 2D users
+// don't pay the three.js bundle cost. ssr:false because R3F can't render
+// server-side (uses WebGL + window).
+const ShotChart3D = dynamic(() => import("./ShotChart3D"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="w-full rounded-xl flex items-center justify-center text-white/40 text-sm"
+      style={{ aspectRatio: "16 / 11", maxHeight: 640, background: "#0a0a14" }}>
+      Loading 3D court…
+    </div>
+  ),
+});
 
 interface ShotChartProps {
   plays: ProcessedPlay[];
@@ -15,6 +33,32 @@ interface ShotChartProps {
   // Optional athlete-id → display-name map (built upstream from the
   // boxscore). Powers the "filter by player" dropdown.
   playerNamesById?: Record<string, string>;
+  // Optional athlete-id → jersey-number map (also from boxscore). Used by
+  // the 3D view's hover tooltip. Falls back to no jersey if absent.
+  playerJerseysById?: Record<string, string>;
+  // Optional athlete-id → headshot URL. Used by the 3D shooter figure to
+  // sample a skin tone per-player; falls back to a neutral default.
+  playerHeadshotsById?: Record<string, string>;
+  // Optional athlete-id → height (inches). Used by the 3D shooter figure
+  // to scale realistically against the 10 ft rim. Falls back to 6'2" (74).
+  playerHeightsById?: Record<string, number>;
+  // True while the game's status is "in" (currently being played). Drives
+  // the pulsing LIVE indicator on the History toggle in 3D mode.
+  isGameLive?: boolean;
+  // ESPN game state: "pre" | "in" | "post". Drives the 3D loading overlay
+  // copy so we can say "Waiting for Game to begin" / "Live Game has Ended"
+  // instead of a generic "Loading…".
+  gameState?: string;
+  // Live (or delayed) game state — drives the 3D mini-scoreboard above
+  // the backboard. All optional so the 2D path doesn't need them.
+  homeScore?: string | number;
+  awayScore?: string | number;
+  liveClock?: string;
+  livePeriod?: number;
+  gameStateText?: string;       // e.g. "Halftime", "End of 3rd Quarter"
+  homeTimeoutsLeft?: number;
+  awayTimeoutsLeft?: number;
+  maxTimeouts?: number;
 }
 
 // ── Half-court geometry (10 px = 1 ft) ─────────────────────────────────────
@@ -152,26 +196,72 @@ export default function ShotChart({
   away,
   teamMap = {},
   playerNamesById = {},
+  playerJerseysById = {},
+  playerHeadshotsById = {},
+  playerHeightsById = {},
+  isGameLive = false,
+  homeScore = "0",
+  awayScore = "0",
+  liveClock,
+  livePeriod,
+  gameStateText,
+  homeTimeoutsLeft,
+  awayTimeoutsLeft,
+  maxTimeouts = 7,
+  gameState,
 }: ShotChartProps) {
   const [sideFilter, setSideFilter] = useState<SideFilter>("all");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
   const [periodFilter, setPeriodFilter] = useState<number | "all">("all");
   const [playerFilter, setPlayerFilter] = useState<string>("all");
+  // Defaults when the user opens the Shot Chart tab:
+  //   - 3D view (the showcase visualization)
+  //   - LIVE mode if the game is currently in progress, otherwise Show
+  //     History (with LIVE disabled by the FilterGroup option below).
+  // Lazy initializers so we read the live state at mount time only —
+  // subsequent prop changes route through the useEffect below.
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
+  const [hideHistory, setHideHistory] = useState<boolean>(() => isGameLive);
+
+  // LIVE mode only makes sense while the game is in progress. If the game
+  // is pre/post and the user previously had LIVE on, snap back to Show
+  // so the user isn't stuck looking at a single replay shot they can't
+  // change.
+  useEffect(() => {
+    if (!isGameLive && hideHistory) setHideHistory(false);
+  }, [isGameLive, hideHistory]);
   const [tooltip, setTooltip] = useState<{
-    svgX: number; svgY: number; text: string; color: string;
+    svgX: number; svgY: number; text: string; color: string; playerId: string | null;
   } | null>(null);
 
   const homeColor = getTeamColor(home.team.abbreviation) || "#a855f7";
   const awayColor = getTeamColor(away.team.abbreviation) || "#3b82f6";
+  const homeSecondary = getTeamSecondary(home.team.abbreviation) || "#1a1a2e";
+  const awaySecondary = getTeamSecondary(away.team.abbreviation) || "#1a1a2e";
+  const homeLogoUrl = getTeamLogoUrl(home.team) ?? undefined;
+  const awayLogoUrl = getTeamLogoUrl(away.team) ?? undefined;
 
-  // Build the canonical shot list. Filter for actual shooting plays with a
-  // valid (non-sentinel) coordinate, project to SVG, classify 2/3-pt by
-  // distance from basket center.
+  // Build the canonical shot list. Filter for actual shooting plays.
+  // Free throws are included even when ESPN omits a coordinate — they
+  // always come from the FT line at court center, so we synthesize a
+  // default coord (x=25, y=15) so they render in 2D and 3D alike.
   const allShots: Shot[] = useMemo(() => {
+    const isFreeThrow = (p: ProcessedPlay) =>
+      /free throw/i.test(p.text ?? "");
     return plays
-      .filter((p) => p.shootingPlay === true && isValidCoord(p.coordinate))
+      .filter(
+        (p) =>
+          p.shootingPlay === true &&
+          (isValidCoord(p.coordinate) || isFreeThrow(p)),
+      )
       .map((p) => {
-        const c = p.coordinate!;
+        const ft = isFreeThrow(p);
+        // Default FT line: court center x=25, 15 ft from rim toward midcourt
+        const c = isValidCoord(p.coordinate)
+          ? p.coordinate!
+          : ft
+            ? { x: 25, y: 15 }
+            : { x: 25, y: 0 }; // unreachable due to filter, but keeps TS happy
         const svgX = c.x * 10;
         // ESPN y = distance (ft) from basket toward midcourt; basket sits at SVG cy=BY
         const svgY = BY - c.y * 10;
@@ -325,71 +415,12 @@ export default function ShotChart({
     );
   }
 
-  // FG% per team (using ALL shots, not filtered, so the summary is constant)
-  const totals = allShots.reduce(
-    (acc, s) => {
-      const k = s.side ?? "unknown";
-      if (!acc[k]) acc[k] = { att: 0, made: 0, threes: 0, threesMade: 0 };
-      acc[k].att++;
-      if (s.made) acc[k].made++;
-      if (s.isThree) {
-        acc[k].threes++;
-        if (s.made) acc[k].threesMade++;
-      }
-      return acc;
-    },
-    {} as Record<string, { att: number; made: number; threes: number; threesMade: number }>,
-  );
-
-  const teamsForSummary: Array<{
-    key: "home" | "away"; name: string; color: string; t: { att: number; made: number; threes: number; threesMade: number };
-  }> = [
-    {
-      key: "home",
-      name: home.team.shortDisplayName ?? home.team.displayName,
-      color: homeColor,
-      t: totals.home ?? { att: 0, made: 0, threes: 0, threesMade: 0 },
-    },
-    {
-      key: "away",
-      name: away.team.shortDisplayName ?? away.team.displayName,
-      color: awayColor,
-      t: totals.away ?? { att: 0, made: 0, threes: 0, threesMade: 0 },
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-3">
-      {/* Per-team FG summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {teamsForSummary.map(({ key, name, color, t }) => {
-          const pct = t.att ? Math.round((t.made / t.att) * 100) : 0;
-          const threePct = t.threes ? Math.round((t.threesMade / t.threes) * 100) : 0;
-          return (
-            <div key={key} className="flex items-center gap-3 px-3 py-2 rounded-xl border"
-              style={{ background: hexWithOpacity(color, 0.08), borderColor: hexWithOpacity(color, 0.25) }}>
-              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
-              <span className="text-xs font-bold" style={{ color }}>{name}</span>
-              <div className="ml-auto flex items-center gap-3 text-[11px] tabular-nums">
-                <span className="text-white/70 font-semibold">
-                  {t.made}/{t.att}{" "}
-                  <span className="text-white/40">FG · {pct}%</span>
-                </span>
-                <span className="text-white/45">
-                  {t.threesMade}/{t.threes}{" "}
-                  <span className="text-white/30">3PT · {threePct}%</span>
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Time scrubber — drag to replay shots up to a moment in game time.
-          Anchors to the live (veil-respecting) edge when at the right end.
-          Quarter / OT tick marks sit above the track and are clickable to
-          jump to the start of that period. */}
-      {liveMaxSecs > 0 && (
+          2D mode only; 3D mode is its own real-time view (the in-world
+          jumbotron shows the live clock + period). */}
+      {viewMode === "2d" && liveMaxSecs > 0 && (
         <div
           className="px-3 py-2 rounded-xl border"
           style={{
@@ -492,76 +523,169 @@ export default function ShotChart({
 
       {/* Filter chips */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* 2D / 3D view toggle — most prominent, leads the row */}
         <FilterGroup
-          label="Team"
+          label="View"
           options={[
-            { value: "all", label: "Both" },
-            { value: "home", label: home.team.shortDisplayName ?? "Home", color: homeColor },
-            { value: "away", label: away.team.shortDisplayName ?? "Away", color: awayColor },
+            { value: "2d", label: "2D" },
+            { value: "3d", label: "3D" },
           ]}
-          value={sideFilter}
-          onChange={(v) => setSideFilter(v as SideFilter)}
+          value={viewMode}
+          onChange={(v) => setViewMode(v as "2d" | "3d")}
         />
-        <FilterGroup
-          label="Result"
-          options={[
-            { value: "all", label: "All" },
-            { value: "made", label: "Made" },
-            { value: "missed", label: "Missed" },
-          ]}
-          value={resultFilter}
-          onChange={(v) => setResultFilter(v as ResultFilter)}
-        />
-        {periods.length > 1 && (
+        {/* History toggle — only meaningful in 3D mode. When on (LIVE),
+            the court keeps only the latest shot and shows the shooter
+            figure. The LIVE label pulses while the game is in progress
+            so the user can see at a glance that data is flowing. */}
+        {viewMode === "3d" && (
           <FilterGroup
-            label="Period"
+            label="History"
             options={[
-              { value: "all", label: "All" },
-              ...periods.map((p) => ({
-                value: String(p),
-                label: p > 4 ? `OT${p - 4}` : `Q${p}`,
-              })),
+              { value: "show", label: "Show" },
+              {
+                value: "hide",
+                label: "LIVE",
+                pulseWhenActive: isGameLive,
+                // Game must be in progress for LIVE mode to make sense
+                disabled: !isGameLive,
+              },
             ]}
-            value={periodFilter === "all" ? "all" : String(periodFilter)}
-            onChange={(v) => setPeriodFilter(v === "all" ? "all" : parseInt(v, 10))}
+            value={hideHistory ? "hide" : "show"}
+            onChange={(v) => setHideHistory(v === "hide")}
           />
         )}
+        {/* Filter chips below — only shown in 2D mode, or in 3D when
+            history is being shown. In 3D LIVE mode the court is locked
+            to the most recent shot, so per-team/result/period/player
+            filtering would be meaningless. */}
+        {!(viewMode === "3d" && hideHistory) && (
+          <>
+            <FilterGroup
+              label="Team"
+              options={[
+                { value: "all", label: "Both" },
+                { value: "home", label: home.team.shortDisplayName ?? "Home", color: homeColor },
+                { value: "away", label: away.team.shortDisplayName ?? "Away", color: awayColor },
+              ]}
+              value={sideFilter}
+              onChange={(v) => setSideFilter(v as SideFilter)}
+            />
+            <FilterGroup
+              label="Result"
+              options={[
+                { value: "all", label: "All" },
+                { value: "made", label: "Made" },
+                { value: "missed", label: "Missed" },
+              ]}
+              value={resultFilter}
+              onChange={(v) => setResultFilter(v as ResultFilter)}
+            />
+            {periods.length > 1 && (
+              <FilterGroup
+                label="Period"
+                options={[
+                  { value: "all", label: "All" },
+                  ...periods.map((p) => ({
+                    value: String(p),
+                    label: p > 4 ? `OT${p - 4}` : `Q${p}`,
+                  })),
+                ]}
+                value={periodFilter === "all" ? "all" : String(periodFilter)}
+                onChange={(v) => setPeriodFilter(v === "all" ? "all" : parseInt(v, 10))}
+              />
+            )}
 
-        {playerOptions.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">
-              Player
+            {playerOptions.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-widest text-white/30 font-semibold">
+                  Player
+                </span>
+                <DarkSelect
+                  ariaLabel="Filter by player"
+                  value={playerFilter}
+                  onValueChange={setPlayerFilter}
+                  triggerClassName="text-[11px] font-semibold rounded-lg border border-white/[0.07] bg-white/[0.02] text-white/85 px-2 py-1 max-w-[200px] hover:border-white/20 transition-colors cursor-pointer focus:outline-none focus:border-white/30"
+                  groups={(() => {
+                    const homeName = home.team.shortDisplayName ?? "Home";
+                    const awayName = away.team.shortDisplayName ?? "Away";
+                    const homeOpts = playerOptions
+                      .filter((p) => p.side === "home")
+                      .map((p) => ({ value: p.id, label: `${p.name} (${p.count})` }));
+                    const awayOpts = playerOptions
+                      .filter((p) => p.side === "away")
+                      .map((p) => ({ value: p.id, label: `${p.name} (${p.count})` }));
+                    const otherOpts = playerOptions
+                      .filter((p) => !p.side)
+                      .map((p) => ({ value: p.id, label: `${p.name} (${p.count})` }));
+                    const out: DarkSelectGroup[] = [
+                      {
+                        label: "All",
+                        options: [{ value: "all", label: "Everyone" }],
+                      },
+                    ];
+                    if (homeOpts.length) out.push({ label: homeName, options: homeOpts });
+                    if (awayOpts.length) out.push({ label: awayName, options: awayOpts });
+                    if (otherOpts.length) out.push({ label: "Other", options: otherOpts });
+                    return out;
+                  })()}
+                />
+              </div>
+            )}
+
+            <span className="text-[11px] text-white/30 ml-auto">
+              {visibleShots.length} of {allShots.length} shots
             </span>
-            <select
-              value={playerFilter}
-              onChange={(e) => setPlayerFilter(e.target.value)}
-              className="text-[11px] font-semibold rounded-lg border border-white/[0.07] bg-white/[0.02] text-white/85 px-2 py-1 max-w-[180px] hover:border-white/20 transition-colors cursor-pointer focus:outline-none focus:border-white/30"
-              style={{ colorScheme: "dark" }}
-              aria-label="Filter by player">
-              <option value="all">Everyone</option>
-              {playerOptions.map((p) => {
-                const teamLabel =
-                  p.side === "home"
-                    ? home.team.shortDisplayName ?? "Home"
-                    : p.side === "away"
-                      ? away.team.shortDisplayName ?? "Away"
-                      : "—";
-                return (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.count}) · {teamLabel}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          </>
         )}
-
-        <span className="text-[11px] text-white/30 ml-auto">
-          {visibleShots.length} of {allShots.length} shots
-        </span>
       </div>
 
-      {/* Court SVG */}
+      {/* Court visualization — 2D SVG by default, 3D Canvas when toggled.
+          Both consume the same `visibleShots` array so filters/scrubber
+          apply consistently. */}
+      {viewMode === "3d" && (
+        <ShotChart3D
+          shots={visibleShots.map<Shot3DInput>((s) => ({
+            id: s.play.id,
+            // SVG → world coord (1 unit = 1 foot). See ShotChart3D for the
+            // full mapping; basket center sits at (0, 10, 4.5).
+            worldX: s.svgX / 10 - 25,
+            worldZ: 4.5 + (BY - s.svgY) / 10,
+            made: s.made,
+            isThree: s.isThree,
+            side: s.side,
+            period: s.period,
+            text: s.play.text ?? "",
+            playerId: s.playerId,
+            gameTimeSecs: s.play.gameTimeSecs ?? 0,
+            play: s.play,
+          }))}
+          homeColor={homeColor}
+          awayColor={awayColor}
+          homeSecondary={homeSecondary}
+          awaySecondary={awaySecondary}
+          homeName={home.team.shortDisplayName ?? home.team.displayName}
+          awayName={away.team.shortDisplayName ?? away.team.displayName}
+          homeLogoUrl={homeLogoUrl}
+          awayLogoUrl={awayLogoUrl}
+          playerNamesById={playerNamesById}
+          playerJerseysById={playerJerseysById}
+          playerHeadshotsById={playerHeadshotsById}
+          playerHeightsById={playerHeightsById}
+          hideHistory={hideHistory}
+          homeScore={homeScore}
+          awayScore={awayScore}
+          liveClock={liveClock}
+          livePeriod={livePeriod}
+          gameStateText={gameStateText}
+          homeTimeoutsLeft={homeTimeoutsLeft}
+          awayTimeoutsLeft={awayTimeoutsLeft}
+          maxTimeouts={maxTimeouts}
+          isGameLive={isGameLive}
+          gameState={gameState}
+        />
+      )}
+
+      {viewMode === "2d" && (
       <div className="relative" onMouseLeave={() => setTooltip(null)}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -583,7 +707,13 @@ export default function ShotChart({
                   transition={{ delay: Math.min(i * 0.005, 0.4), duration: 0.18 }}
                   style={{ cursor: "pointer" }}
                   onMouseEnter={() =>
-                    setTooltip({ svgX: s.svgX, svgY: s.svgY, text: s.play.text ?? "", color })
+                    setTooltip({
+                      svgX: s.svgX,
+                      svgY: s.svgY,
+                      text: s.play.text ?? "",
+                      color,
+                      playerId: s.playerId,
+                    })
                   }>
                   {s.made ? (
                     <>
@@ -613,26 +743,55 @@ export default function ShotChart({
           </AnimatePresence>
         </svg>
 
-        {/* Tooltip pinned to bottom of court */}
+        {/* Tooltip pinned to bottom of court — leads with the shooter's
+            jersey + name (when known), then the full play description. */}
         <AnimatePresence>
-          {tooltip && (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-[11px] text-white/85 max-w-[300px] text-center pointer-events-none z-10 shadow-lg"
-              style={{
-                background: "rgba(15,15,26,0.96)",
-                border: `1px solid ${hexWithOpacity(tooltip.color, 0.45)}`,
-              }}>
-              {tooltip.text}
-            </motion.div>
-          )}
+          {tooltip && (() => {
+            const jersey = tooltip.playerId
+              ? playerJerseysById[tooltip.playerId]
+              : undefined;
+            const name = tooltip.playerId
+              ? playerNamesById[tooltip.playerId]
+              : undefined;
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg text-[11px] text-white/85 max-w-[320px] text-center pointer-events-none z-10 shadow-lg"
+                style={{
+                  background: "rgba(15,15,26,0.96)",
+                  border: `1px solid ${hexWithOpacity(tooltip.color, 0.45)}`,
+                }}>
+                {name && (
+                  <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                    {jersey && (
+                      <span
+                        className="inline-flex items-center justify-center min-w-[20px] h-[18px] px-1 rounded text-[10px] font-bold tabular-nums"
+                        style={{
+                          background: hexWithOpacity(tooltip.color, 0.18),
+                          color: tooltip.color,
+                          border: `1px solid ${hexWithOpacity(tooltip.color, 0.5)}`,
+                        }}>
+                        #{jersey}
+                      </span>
+                    )}
+                    <span className="font-bold" style={{ color: tooltip.color }}>
+                      {name}
+                    </span>
+                  </div>
+                )}
+                <div>{tooltip.text}</div>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
       </div>
+      )}
 
-      {/* Legend — both makes and misses are team-colored;
-          dot = made, X = missed (classic shot-chart convention). */}
+      {/* Legend — 2D only; the 3D view shows team-colored arcs+balls and an
+          in-canvas hint for orbit controls. */}
+      {viewMode === "2d" && (
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[11px] text-white/45 mt-1">
         <div className="flex items-center gap-3">
           <LegendMarker color={homeColor} kind="made" />
@@ -653,6 +812,7 @@ export default function ShotChart({
           <span>Missed</span>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -664,7 +824,7 @@ function FilterGroup({
   onChange,
 }: {
   label: string;
-  options: { value: string; label: string; color?: string }[];
+  options: { value: string; label: string; color?: string; pulseWhenActive?: boolean; disabled?: boolean }[];
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -674,24 +834,38 @@ function FilterGroup({
       <div className="flex items-center gap-1 p-0.5 rounded-lg border border-white/[0.07] bg-white/[0.02]">
         {options.map((o) => {
           const active = o.value === value;
+          const pulsing = active && o.pulseWhenActive;
           return (
             <button
               key={o.value}
               type="button"
-              onClick={() => onChange(o.value)}
+              disabled={o.disabled}
+              onClick={() => {
+                if (o.disabled) return;
+                onChange(o.value);
+              }}
               className={cn(
-                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center gap-1.5",
                 active ? "text-white" : "text-white/45 hover:text-white/70",
+                o.disabled && "opacity-30 cursor-not-allowed",
               )}
               style={{
-                background: active
-                  ? o.color
-                    ? hexWithOpacity(o.color, 0.2)
-                    : "rgba(255,255,255,0.08)"
-                  : "transparent",
-                color: active && o.color ? o.color : undefined,
+                background:
+                  active && !o.disabled
+                    ? o.color
+                      ? hexWithOpacity(o.color, 0.2)
+                      : "rgba(255,255,255,0.08)"
+                    : "transparent",
+                color: active && o.color && !o.disabled ? o.color : undefined,
               }}>
-              {o.label}
+              {pulsing && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full pulse-live shrink-0"
+                  style={{ background: "#22c55e" }}
+                  aria-hidden
+                />
+              )}
+              <span className={pulsing ? "animate-pulse" : undefined}>{o.label}</span>
             </button>
           );
         })}

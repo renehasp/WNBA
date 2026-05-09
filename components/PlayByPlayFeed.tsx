@@ -7,6 +7,7 @@ import type { ProcessedPlay } from "@/lib/spoiler-engine";
 import type { ESPNCompetitor, ESPNPlayerStats, ESPNTeam } from "@/lib/espn";
 import { getTeamColor } from "@/lib/teams";
 import { hexWithOpacity, ordinalPeriod } from "@/lib/utils";
+import { DarkSelect, type DarkSelectGroup } from "./DarkSelect";
 
 // Add global styles for select dropdown theme
 const selectStyles = `
@@ -681,21 +682,24 @@ export default function PlayByPlayFeed({
         {/* Player Filter */}
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold text-white/50 uppercase tracking-wide">Player</label>
-          <select
-            value={selectedPlayer ?? ""}
-            onChange={(e) => setSelectedPlayer(e.target.value || null)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30">
-            <option value="">All Players</option>
-            {Array.from(playersByTeam.entries()).map(([team, players]) => (
-              <optgroup key={team} label={team}>
-                {players.map((player) => (
-                  <option key={player.name} value={player.name}>
-                    {player.name} ({team})
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <DarkSelect
+            ariaLabel="Filter by player"
+            value={selectedPlayer ?? "__all__"}
+            onValueChange={(v) => setSelectedPlayer(v === "__all__" ? null : v)}
+            triggerClassName="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/10 transition-colors focus:outline-none min-w-[180px]"
+            groups={[
+              { label: "All", options: [{ value: "__all__", label: "All Players" }] },
+              ...Array.from(playersByTeam.entries()).map<DarkSelectGroup>(
+                ([team, players]) => ({
+                  label: team,
+                  options: players.map((player) => ({
+                    value: player.name,
+                    label: player.name,
+                  })),
+                }),
+              ),
+            ]}
+          />
           {selectedPlayer && (
             <button
               onClick={() => setSelectedPlayer(null)}
@@ -709,17 +713,21 @@ export default function PlayByPlayFeed({
         {/* Play Type Filter */}
         <div className="flex items-center gap-2">
           <label className="text-xs font-semibold text-white/50 uppercase tracking-wide">Play Type</label>
-          <select
-            value={selectedPlayType ?? ""}
-            onChange={(e) => setSelectedPlayType((e.target.value as PlayType) || null)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white/30">
-            <option value="">All Play Types</option>
-            {uniquePlayTypes.map((type) => (
-              <option key={type} value={type}>
-                {CONFIGS[type].label || type}
-              </option>
-            ))}
-          </select>
+          <DarkSelect
+            ariaLabel="Filter by play type"
+            value={selectedPlayType ?? "__all__"}
+            onValueChange={(v) =>
+              setSelectedPlayType(v === "__all__" ? null : (v as PlayType))
+            }
+            triggerClassName="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] border border-white/10 text-white hover:bg-white/10 transition-colors focus:outline-none min-w-[160px]"
+            options={[
+              { value: "__all__", label: "All Play Types" },
+              ...uniquePlayTypes.map((type) => ({
+                value: type,
+                label: CONFIGS[type].label || type,
+              })),
+            ]}
+          />
           {selectedPlayType && (
             <button
               onClick={() => setSelectedPlayType(null)}
